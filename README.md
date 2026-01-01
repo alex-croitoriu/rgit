@@ -1,0 +1,17 @@
+# TODOS
+- [x] init
+- [X] add
+   - [X] hash object
+   - [X] store file
+   - 
+- [ ] status
+- [X] commit
+- [ ] diff
+- [ ] branch
+- [ ] merge
+- [ ] utils
+  - [X] find repository path
+  - [ ] rgitignore checker
+  - [X] file changed checker
+  - [ ] 
+  - [ ] 
