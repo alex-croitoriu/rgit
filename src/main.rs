@@ -30,21 +30,13 @@ fn main() {
                     Err(e) => println!("{e}"),
                 }
             }
-        },
-        // Commands::Rm { paths } => {
-        //     for path in paths {
-        //         match rm(&path) {
-        //             Ok(()) => println!("Remove '{path}' from the index"),
-        //             Err(e) => println!("{e}"),
-        //         }
-        //     }
-        // },
+        }
         Commands::Commit { message } => match commit(&message) {
             Ok(hash) => println!("Commit: {hash}"),
             Err(e) => println!("{e}"),
         },
         Commands::Diff { target } => match diff(target) {
-            Ok(()) => (),
+            Ok(diff) => println!("{diff}"),
             Err(e) => println!("{e}"),
         },
         Commands::Branch(BranchSubcommands::List) => match list() {
@@ -67,7 +59,9 @@ fn main() {
             Ok(()) => println!("Switched to: {target}"),
             Err(e) => println!("{e}"),
         },
-        // Commands::Merge { target } => match merge() {},
-        _ => (),
+        Commands::Merge { target } => match merge(&target) {
+            Ok(hash) => println!("Merge successful: {hash}"),
+            Err(e) => println!("{e}"),
+        },
     }
 }

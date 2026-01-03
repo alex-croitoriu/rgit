@@ -8,14 +8,14 @@ use std::path::{Path, PathBuf};
 use crate::object_store::Object;
 use crate::utils::get_repository_root;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IndexEntry {
     pub hash: String,
     pub size: u64,
     pub mtime: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Index {
     pub entries: BTreeMap<PathBuf, IndexEntry>,
 }

@@ -5,8 +5,12 @@ use std::time::SystemTime;
 use std::{env, fs};
 
 use anyhow::{Result, anyhow};
+use base64::Engine;
+use base64::engine::general_purpose;
+use similar::{ChangeTag, TextDiff};
 
 use crate::index::Index;
+use crate::object_store::{Object, Tree, TreeEntry};
 
 pub fn get_repository_root() -> Result<PathBuf> {
     let mut path = env::current_dir()?;
@@ -81,17 +85,16 @@ pub fn get_branch_path(name: &str) -> Result<PathBuf> {
 pub fn get_staged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
     let (mut added, mut deleted, mut modified) = (Vec::new(), Vec::new(), Vec::new());
 
-    let index = Index::load()?;
-    let head = if let Ok(path) = get_current_branch_path()
-        && let Ok(hash) = fs::read_to_string(path)
-    {
-        Index::restore_from_commit(&hash)?
+    let current_index = Index::load()?;
+    let head_path = get_current_branch_path()?;
+    let head_index = if let Ok(head_hash) = fs::read_to_string(head_path) {
+        Index::restore_from_commit(&head_hash)?
     } else {
         Index::new()
     };
 
-    for (name, index_entry) in &index.entries {
-        if let Some(head_entry) = head.entries.get(name) {
+    for (name, index_entry) in &current_index.entries {
+        if let Some(head_entry) = head_index.entries.get(name) {
             if index_entry.hash != head_entry.hash {
                 modified.push(name.clone());
             }
@@ -100,8 +103,8 @@ pub fn get_staged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)
         }
     }
 
-    for (name, _) in head.entries {
-        if !index.entries.contains_key(&name) {
+    for (name, _) in head_index.entries {
+        if !current_index.entries.contains_key(&name) {
             deleted.push(name);
         }
     }
@@ -169,29 +172,64 @@ pub fn get_unstaged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf
     Ok((added, deleted, modified))
 }
 
-pub fn get_commit_index_diff(hash: &str) -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
+pub fn diff_indices(
+    from: &Index,
+    to: &Index,
+) -> Result<(
+    Vec<(PathBuf, String)>,
+    Vec<(PathBuf, String)>,
+    Vec<(PathBuf, String)>,
+)> {
     let (mut added, mut deleted, mut modified) = (Vec::new(), Vec::new(), Vec::new());
 
-    let current_index = Index::load()?;
-    let commit_index = Index::restore_from_commit(hash)?;
-
-    for (name, index_entry) in &commit_index.entries {
-        if let Some(head_entry) = current_index.entries.get(name) {
-            if index_entry.hash != head_entry.hash {
-                modified.push(name.clone());
+    for (name, from_entry) in &from.entries {
+        if let Some(to_entry) = to.entries.get(name) {
+            if from_entry.hash != to_entry.hash {
+                modified.push((name.clone(), diff(&from_entry.hash, &to_entry.hash)?));
             }
         } else {
-            added.push(name.clone());
+            let from_content = get_blob_content(&from_entry.hash)?;
+            deleted.push((name.clone(), generate_diff(&from_content, "")));
         }
     }
 
-    for (name, _) in current_index.entries {
-        if !commit_index.entries.contains_key(&name) {
-            deleted.push(name);
+    for (name, to_entry) in &to.entries {
+        if !from.entries.contains_key(name) {
+            let to_content = get_blob_content(&to_entry.hash)?;
+            added.push((name.clone(), generate_diff("", &to_content)));
         }
     }
 
     Ok((added, deleted, modified))
+}
+
+pub fn diff(from: &str, to: &str) -> Result<String> {
+    let from_content = get_blob_content(from)?;
+    let to_content = get_blob_content(to)?;
+    Ok(generate_diff(&from_content, &to_content))
+}
+
+pub fn get_blob_content(hash: &str) -> Result<String> {
+    if let Object::Blob(blob) = Object::load(hash)? {
+        let bytes = general_purpose::STANDARD.decode(blob.content)?;
+        Ok(String::from_utf8(bytes)?)
+    } else {
+        Err(anyhow!("Object {} is not a blob", hash))
+    }
+}
+
+fn generate_diff(from: &str, to: &str) -> String {
+    let diff = TextDiff::from_lines(from, to);
+    let mut output = String::new();
+    for change in diff.iter_all_changes() {
+        let sign = match change.tag() {
+            ChangeTag::Delete => "- ",
+            ChangeTag::Insert => "+ ",
+            ChangeTag::Equal => "  ",
+        };
+        output.push_str(&format!("{}{}", sign, change));
+    }
+    output
 }
 
 pub fn get_ignored() -> Option<Vec<PathBuf>> {
@@ -204,3 +242,102 @@ pub fn get_ignored() -> Option<Vec<PathBuf>> {
     }
     Some(ignored)
 }
+
+pub fn update_working_directory(index: &mut Index, old_index: &Index) -> Result<()> {
+    let root = get_repository_root()?;
+
+    for path in old_index.entries.keys() {
+        if !index.entries.contains_key(path) {
+            let absolute_path = root.join(path);
+            if absolute_path.exists() {
+                fs::remove_file(absolute_path)?;
+            }
+        }
+    }
+
+    for (path, entry) in &mut index.entries {
+        let content = get_blob_content(&entry.hash)?;
+        let absolute_path = root.join(path);
+        if let Some(parent) = absolute_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&absolute_path, content)?;
+
+        entry.mtime = get_mtime(&absolute_path)?;
+        entry.size = fs::metadata(&absolute_path)?.len();
+    }
+
+    Ok(())
+}
+
+pub fn create_tree_from_index(index: &Index) -> Result<String> {
+    let mut stack = Vec::<(String, Tree)>::new();
+    stack.push((
+        String::from("root"),
+        Tree {
+            entries: Vec::new(),
+        },
+    ));
+
+    for (name, entry) in &index.entries {
+        let path = PathBuf::from(name);
+        let components = path
+            .components()
+            .filter_map(|c| c.as_os_str().to_str())
+            .collect::<Vec<_>>();
+
+        let file = components
+            .last()
+            .ok_or(anyhow!("Last element not found"))?
+            .to_string();
+        let mut i = 0;
+
+        while i + 1 < stack.len() && i < components.len() && stack[i + 1].0 == components[i] {
+            i += 1;
+        }
+
+        while i + 1 < stack.len() {
+            if let Some(last) = stack.pop()
+                && let Some(second_to_last) = stack.last_mut()
+            {
+                second_to_last.1.entries.push(TreeEntry {
+                    object_type: String::from("Tree"),
+                    object_hash: Object::Tree(last.1).store()?,
+                    name: last.0,
+                });
+            }
+        }
+
+        stack.extend(components[i..components.len() - 1].iter().map(|c| {
+            (
+                c.to_string(),
+                Tree {
+                    entries: Vec::new(),
+                },
+            )
+        }));
+
+        if let Some(last) = stack.last_mut() {
+            last.1.entries.push(TreeEntry {
+                object_type: String::from("Blob"),
+                object_hash: entry.hash.clone(),
+                name: file,
+            });
+        }
+    }
+
+    while 1 < stack.len() {
+        if let Some(last) = stack.pop()
+            && let Some(second_to_last) = stack.last_mut()
+        {
+            second_to_last.1.entries.push(TreeEntry {
+                object_type: String::from("Tree"),
+                object_hash: Object::Tree(last.1).store()?,
+                name: last.0,
+            });
+        }
+    }
+
+    Object::Tree(stack.pop().ok_or(anyhow!("Error at pop stack"))?.1).store()
+}
+

@@ -21,8 +21,8 @@ pub fn commit(message: &str) -> Result<String> {
         },
     ));
 
-    for (name, entry) in index.entries {
-        let path = PathBuf::from(&name);
+    for (name, entry) in &index.entries {
+        let path = PathBuf::from(name);
         let components = path
             .components()
             .filter_map(|c| c.as_os_str().to_str())
@@ -62,7 +62,7 @@ pub fn commit(message: &str) -> Result<String> {
         if let Some(last) = stack.last_mut() {
             last.1.entries.push(TreeEntry {
                 object_type: String::from("Blob"),
-                object_hash: entry.hash,
+                object_hash: entry.hash.clone(),
                 name: file,
             });
         }

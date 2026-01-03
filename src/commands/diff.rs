@@ -3,36 +3,64 @@ use std::fs;
 use anyhow::{Result, anyhow};
 
 use crate::{
-    object_store::Object,
-    utils::{get_branch_path, get_current_branch_path, get_commit_index_diff},
+    index::Index,
+    utils::{diff_indices, get_branch_path, get_current_branch_path},
 };
 
-pub fn diff(target: Option<String>) -> Result<()> {
+pub fn diff(target: Option<String>) -> Result<String> {
+    let mut output = String::new();
     if let Some(target) = target {
         let branch_path = get_branch_path(&target)?;
         if !branch_path.exists() {
             return Err(anyhow!("Branch does not exist"));
         }
 
-        let hash = fs::read_to_string(branch_path)?;
-        let diff = get_commit_index_diff(&hash)?;
-        println!("{diff:?}");
+        let branch_hash = fs::read_to_string(branch_path)?;
+        let branch_index = Index::restore_from_commit(&branch_hash)?;
+
+        let head_path = get_current_branch_path()?;
+        let head_hash = fs::read_to_string(head_path)?;
+        let head_index = Index::restore_from_commit(&head_hash)?;
+
+        let diff = diff_indices(&head_index, &branch_index)?;
+        for (path, change) in diff.0 {
+            output.push_str(&format!("{:<11}{}\n", "Added:", path.display()));
+            output.push_str(&change);
+        }
+        for (path, change) in diff.1 {
+            output.push_str(&format!("{:<11}{}\n", "Deleted:", path.display()));
+            output.push_str(&change);
+        }
+        for (path, change) in diff.2 {
+            output.push_str(&format!("{:<11}{}\n", "Modified:", path.display()));
+            output.push_str(&change);
+        }
+
     } else {
-        let commit_hash = fs::read_to_string(get_current_branch_path()?)?;
-        let commit_object = Object::load(&commit_hash)?;
+        let head_path = get_current_branch_path()?;
 
-        if let Object::Commit(commit) = commit_object {
-            if commit.parent_hashes.is_empty() {
-                return Err(anyhow!("Commit has no parents"));
-            }
+        let head_index = if let Ok(head_hash) = fs::read_to_string(head_path) {
+            Index::restore_from_commit(&head_hash)?
+        } else {
+            Index::new()
+        };
 
-            for parent_hash in commit.parent_hashes {
-                if let Ok(diff) = get_commit_index_diff(&parent_hash) {
-                    println!("{diff:?}");
-                }
-            }
+        let current_index = Index::load()?;
+
+        let diff = diff_indices(&head_index, &current_index)?;
+        for (path, change) in diff.0 {
+            output.push_str(&format!("{:<11}{}\n", "Added:", path.display()));
+            output.push_str(&change);
+        }
+        for (path, change) in diff.1 {
+            output.push_str(&format!("{:<11}{}\n", "Deleted:", path.display()));
+            output.push_str(&change);
+        }
+        for (path, change) in diff.2 {
+            output.push_str(&format!("{:<11}{}\n", "Modified:", path.display()));
+            output.push_str(&change);
         }
     }
 
-    Ok(())
+    Ok(output)
 }

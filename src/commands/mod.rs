@@ -12,6 +12,6 @@ pub use branch::{create, delete, list};
 pub use commit::commit;
 pub use diff::diff;
 pub use init::init;
-// pub use merge::merge;
+pub use merge::merge;
 pub use checkout::checkout;
 pub use status::status;
