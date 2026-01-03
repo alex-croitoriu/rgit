@@ -35,7 +35,6 @@ pub fn diff(target: Option<String>) -> Result<String> {
             output.push_str(&format!("{:<11}{}\n", "Modified:", path.display()));
             output.push_str(&change);
         }
-
     } else {
         let head_path = get_current_branch_path()?;
 

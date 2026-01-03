@@ -202,16 +202,16 @@ fn three_way_merge(base: &Index, head: &Index, target: &Index) -> Result<(Index,
     Ok((merged, conflicts))
 }
 
-fn write_conflict_markers(conflicts: &[PathBuf], ours: &Index, theirs: &Index) -> Result<()> {
+fn write_conflict_markers(conflicts: &[PathBuf], head: &Index, target: &Index) -> Result<()> {
     let root = get_repository_root()?;
     for path in conflicts {
-        let ours_content = if let Some(entry) = ours.entries.get(path) {
+        let head_content = if let Some(entry) = head.entries.get(path) {
             get_blob_content(&entry.hash)?
         } else {
             String::new()
         };
 
-        let theirs_content = if let Some(entry) = theirs.entries.get(path) {
+        let target_content = if let Some(entry) = target.entries.get(path) {
             get_blob_content(&entry.hash)?
         } else {
             String::new()
@@ -219,7 +219,7 @@ fn write_conflict_markers(conflicts: &[PathBuf], ours: &Index, theirs: &Index) -
 
         let content = format!(
             "<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>>\n",
-            ours_content, theirs_content
+            head_content, target_content
         );
 
         let full_path = root.join(path);
@@ -230,4 +230,3 @@ fn write_conflict_markers(conflicts: &[PathBuf], ours: &Index, theirs: &Index) -
     }
     Ok(())
 }
-

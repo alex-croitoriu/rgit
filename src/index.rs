@@ -59,8 +59,7 @@ impl Index {
     pub fn remove(&mut self, path: &Path) -> Result<()> {
         if self.entries.remove(path).is_some() {
             Ok(())
-        }
-        else {
+        } else {
             Err(anyhow!("File not in index: '{}'", path.display()))
         }
     }

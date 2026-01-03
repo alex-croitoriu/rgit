@@ -187,16 +187,20 @@ pub fn diff_indices(
             if from_entry.hash != to_entry.hash {
                 modified.push((name.clone(), diff(&from_entry.hash, &to_entry.hash)?));
             }
-        } else {
-            let from_content = get_blob_content(&from_entry.hash)?;
+        } else if let Ok(from_content) = get_blob_content(&from_entry.hash) {
             deleted.push((name.clone(), generate_diff(&from_content, "")));
+        } else {
+            deleted.push((name.clone(), String::from("Binary file")));
         }
     }
 
     for (name, to_entry) in &to.entries {
         if !from.entries.contains_key(name) {
-            let to_content = get_blob_content(&to_entry.hash)?;
-            added.push((name.clone(), generate_diff("", &to_content)));
+            if let Ok(to_content) = get_blob_content(&to_entry.hash) {
+                added.push((name.clone(), generate_diff("", &to_content)));
+            } else {
+                added.push((name.clone(), String::from("Binary file")));
+            }
         }
     }
 
@@ -210,9 +214,18 @@ pub fn diff(from: &str, to: &str) -> Result<String> {
 }
 
 pub fn get_blob_content(hash: &str) -> Result<String> {
+    let bytes = get_blob_bytes(hash)?;
+    if let Ok(content) = String::from_utf8(bytes) {
+        Ok(content)
+    } else {
+        Ok(String::from("Binary file"))
+    }
+}
+
+pub fn get_blob_bytes(hash: &str) -> Result<Vec<u8>> {
     if let Object::Blob(blob) = Object::load(hash)? {
         let bytes = general_purpose::STANDARD.decode(blob.content)?;
-        Ok(String::from_utf8(bytes)?)
+        Ok(bytes)
     } else {
         Err(anyhow!("Object {} is not a blob", hash))
     }
@@ -256,7 +269,7 @@ pub fn update_working_directory(index: &mut Index, old_index: &Index) -> Result<
     }
 
     for (path, entry) in &mut index.entries {
-        let content = get_blob_content(&entry.hash)?;
+        let content = get_blob_bytes(&entry.hash)?;
         let absolute_path = root.join(path);
         if let Some(parent) = absolute_path.parent() {
             fs::create_dir_all(parent)?;
@@ -340,4 +353,3 @@ pub fn create_tree_from_index(index: &Index) -> Result<String> {
 
     Object::Tree(stack.pop().ok_or(anyhow!("Error at pop stack"))?.1).store()
 }
-

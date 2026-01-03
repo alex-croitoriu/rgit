@@ -5,8 +5,8 @@ use anyhow::{Result, anyhow};
 use crate::{
     index::Index,
     utils::{
-        get_branch_path, get_current_branch_path, get_repository_root,
-        get_staged_changes, get_unstaged_changes, update_working_directory,
+        get_branch_path, get_current_branch_path, get_repository_root, get_staged_changes,
+        get_unstaged_changes, update_working_directory,
     },
 };
 
