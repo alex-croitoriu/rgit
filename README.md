@@ -4,14 +4,13 @@
    - [X] hash object
    - [X] store file
    - 
-- [ ] status
+- [X] status
 - [X] commit
 - [ ] diff
-- [ ] branch
+- [X] branch
 - [ ] merge
-- [ ] utils
+- [x] checkout
   - [X] find repository path
-  - [ ] rgitignore checker
+  - [x] rgitignore checker
   - [X] file changed checker
-  - [ ] 
   - [ ] 

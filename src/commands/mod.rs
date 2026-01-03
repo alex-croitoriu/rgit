@@ -1,17 +1,17 @@
 mod add;
 mod branch;
+mod checkout;
 mod commit;
 mod diff;
 mod init;
 mod merge;
 mod status;
-mod checkout;
 
 pub use add::add;
-pub use branch::{list, create, delete};
+pub use branch::{create, delete, list};
 pub use commit::commit;
 pub use diff::diff;
 pub use init::init;
-pub use merge::merge;
-pub use status::status;
+// pub use merge::merge;
 pub use checkout::checkout;
+pub use status::status;

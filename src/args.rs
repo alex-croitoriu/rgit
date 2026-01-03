@@ -22,18 +22,20 @@ pub enum Commands {
     },
     /// Record changes to the repository
     Commit { message: String },
-    /// Show changes between objects (commits or branches)
-    Diff { obj1: String, obj2: String },
+    /// Show changes between index and the previous commit or a branch
+    Diff { target: Option<String> },
+    /// Switch to another branch
+    Checkout { target: String },
     /// Create or delete branches
     #[command(subcommand)]
     Branch(BranchSubcommands),
     /// Merge another branch into the current one
-    Merge { branch: String },
+    Merge { target: String },
 }
 
 #[derive(Subcommand)]
 pub enum BranchSubcommands {
+    List,
     Create { name: String },
     Delete { name: String },
-    List,
 }

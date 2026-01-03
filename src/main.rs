@@ -16,7 +16,7 @@ fn main() {
 
     match cli.command {
         Commands::Init => match init() {
-            Ok(path) => println!("Initialized empty repository in '{path}'"),
+            Ok(path) => println!("Initialized empty repository in '{}'", path.display()),
             Err(e) => println!("{e}"),
         },
         Commands::Status => match status() {
@@ -30,12 +30,23 @@ fn main() {
                     Err(e) => println!("{e}"),
                 }
             }
-        }
+        },
+        // Commands::Rm { paths } => {
+        //     for path in paths {
+        //         match rm(&path) {
+        //             Ok(()) => println!("Remove '{path}' from the index"),
+        //             Err(e) => println!("{e}"),
+        //         }
+        //     }
+        // },
         Commands::Commit { message } => match commit(&message) {
             Ok(hash) => println!("Commit: {hash}"),
             Err(e) => println!("{e}"),
         },
-        // Commands::Diff { obj1, obj2 } => match diff() {},
+        Commands::Diff { target } => match diff(target) {
+            Ok(()) => (),
+            Err(e) => println!("{e}"),
+        },
         Commands::Branch(BranchSubcommands::List) => match list() {
             Ok(branches) => {
                 for branch in branches {
@@ -52,7 +63,11 @@ fn main() {
             Ok(()) => println!("Branch deleted: {name}"),
             Err(e) => println!("{e}"),
         },
-        // Commands::Merge { branch }=> match merge() {},
+        Commands::Checkout { target } => match checkout(&target) {
+            Ok(()) => println!("Switched to: {target}"),
+            Err(e) => println!("{e}"),
+        },
+        // Commands::Merge { target } => match merge() {},
         _ => (),
     }
 }

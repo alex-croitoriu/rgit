@@ -5,24 +5,24 @@ use std::fs;
 
 use crate::utils::get_repository_root;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Blob {
     pub content: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TreeEntry {
     pub object_type: String,
     pub object_hash: String,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Tree {
     pub entries: Vec<TreeEntry>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Commit {
     pub tree_hash: String,
     pub message: String,
@@ -30,7 +30,7 @@ pub struct Commit {
     pub parent_hashes: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum Object {
     Blob(Blob),
@@ -39,7 +39,7 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn hash(&self) -> Result<String> {
+    fn hash(&self) -> Result<String> {
         let mut hasher = Sha1::new();
         let json = serde_json::to_string(self)?;
         hasher.update(json);
@@ -63,5 +63,15 @@ impl Object {
         }
 
         Ok(hash)
+    }
+
+    pub fn load(hash: &str) -> Result<Object> {
+        let root = get_repository_root()?;
+        let (dir, file) = hash.split_at(2);
+        let path = root.join(".rgit/objects").join(dir).join(file);
+
+        let content = fs::read_to_string(path)?;
+        let obj: Object = serde_json::from_str(&content)?;
+        Ok(obj)
     }
 }
