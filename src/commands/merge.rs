@@ -58,15 +58,24 @@ pub fn merge(target: &str) -> Result<String> {
     let (mut merged_index, conflicts) = three_way_merge(&base_index, &head_index, &target_index);
 
     if !conflicts.is_empty() {
-        write_conflict_markers(&conflicts, &head_index, &target_index)?;
-
         let root = get_repository_root()?;
         fs::write(root.join(".rgit/MERGE_HEAD"), &target_hash)?;
 
         update_working_directory(&mut merged_index, &head_index)?;
         merged_index.store()?;
 
-        return Err(anyhow!("Merge conflicts in: {conflicts:?}"));
+        write_conflict_markers(conflicts.clone(), &head_index, &target_index)?;
+
+        return Err(anyhow!(
+            "Merge conflicts in: {}",
+            conflicts
+                .iter()
+                .fold(String::new(), |acc, path| if acc.is_empty() {
+                    path.display().to_string()
+                } else {
+                    format!("{}, {}", acc, path.display())
+                })
+        ));
     }
 
     let tree_hash = create_tree_from_index(&merged_index)?;
@@ -208,16 +217,17 @@ fn three_way_merge(base: &Index, head: &Index, target: &Index) -> (Index, Vec<Pa
     (merged, conflicts)
 }
 
-fn write_conflict_markers(conflicts: &[PathBuf], head: &Index, target: &Index) -> Result<()> {
+fn write_conflict_markers(conflicts: Vec<PathBuf>, head: &Index, target: &Index) -> Result<()> {
     let root = get_repository_root()?;
+
     for path in conflicts {
-        let head_content = if let Some(entry) = head.entries.get(path) {
+        let head_content = if let Some(entry) = head.entries.get(&path) {
             get_blob_content(&entry.hash)?
         } else {
             String::new()
         };
 
-        let target_content = if let Some(entry) = target.entries.get(path) {
+        let target_content = if let Some(entry) = target.entries.get(&path) {
             get_blob_content(&entry.hash)?
         } else {
             String::new()
@@ -225,11 +235,11 @@ fn write_conflict_markers(conflicts: &[PathBuf], head: &Index, target: &Index) -
 
         let content = format!("<<<<<<< HEAD\n{head_content}\n=======\n{target_content}\n>>>>>>>\n");
 
-        let full_path = root.join(path);
-        if let Some(parent) = full_path.parent() {
+        let absolute_path = root.join(path);
+        if let Some(parent) = absolute_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(full_path, content)?;
+        fs::write(absolute_path, content)?;
     }
     Ok(())
 }

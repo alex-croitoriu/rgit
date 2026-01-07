@@ -1,7 +1,10 @@
 use anyhow::Result;
+use flate2::bufread::ZlibDecoder;
+use flate2::{Compression, write::ZlibEncoder};
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::fs;
+use std::io::prelude::*;
 
 use crate::utils::get_repository_root;
 
@@ -49,17 +52,22 @@ impl Object {
     }
 
     pub fn store(&self) -> Result<String> {
+        let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+
         let root = get_repository_root()?;
         let hash = self.hash()?;
         let (dir_name, file_name) = hash.split_at(2);
         let json = serde_json::to_string(self)?;
+
+        e.write_all(json.as_bytes())?;
+        let bytes = e.finish()?;
 
         let dir_path = root.join(".rgit/objects").join(dir_name);
         let file_path = dir_path.join(file_name);
         fs::create_dir_all(dir_path)?;
 
         if !file_path.exists() {
-            fs::write(&file_path, json)?;
+            fs::write(&file_path, bytes)?;
         }
 
         Ok(hash)
@@ -70,8 +78,12 @@ impl Object {
         let (dir, file) = hash.split_at(2);
         let path = root.join(".rgit/objects").join(dir).join(file);
 
-        let content = fs::read_to_string(path)?;
-        let obj: Object = serde_json::from_str(&content)?;
+        let bytes = fs::read(path)?;
+        let mut d = ZlibDecoder::new(bytes.as_slice());
+        let mut json = String::new();
+        d.read_to_string(&mut json)?;
+
+        let obj = serde_json::from_str(&json)?;
         Ok(obj)
     }
 }

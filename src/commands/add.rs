@@ -28,13 +28,12 @@ pub fn add(path: &str) -> Result<()> {
 
         if to_remove.is_empty() {
             return Err(anyhow!("Invalid path: '{}'", relative_path.display()));
-        } else {
-            for path in to_remove {
-                index.remove(&path)?;
-            }
-            index.store()?;
-            return Ok(());
         }
+        for path in to_remove {
+            index.remove(&path)?;
+        }
+        index.store()?;
+        return Ok(());
     }
 
     if absolute_path.is_file() {

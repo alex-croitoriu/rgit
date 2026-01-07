@@ -56,7 +56,7 @@ fn main() {
             Err(e) => println!("{e}"),
         },
         Commands::Checkout { target } => match checkout(&target) {
-            Ok(()) => println!("Switched to: {target}"),
+            Ok(()) => println!("Switched to branch: {target}"),
             Err(e) => println!("{e}"),
         },
         Commands::Merge { target } => match merge(&target) {
