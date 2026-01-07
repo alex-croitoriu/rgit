@@ -28,7 +28,7 @@ pub fn create(name: &str) -> Result<()> {
     let branch_path = root.join(".rgit/refs/heads").join(name);
 
     if branch_path.exists() {
-        return Err(anyhow!("Branch already exists"));
+        return Err(anyhow!("Branch already exists : '{name}'"));
     }
 
     if let Some(head) = fs::read_to_string(root.join(".rgit/HEAD"))?.strip_prefix("ref: ") {
@@ -46,7 +46,7 @@ pub fn delete(name: &str) -> Result<()> {
 
     let branch_path = root.join(".rgit/refs/heads").join(name);
     if !branch_path.exists() {
-        return Err(anyhow!("Branch doest not exist"));
+        return Err(anyhow!("Branch doest not exist: '{name}'"));
     }
 
     if let Some(head) = fs::read_to_string(root.join(".rgit/HEAD"))?.strip_prefix("ref: ") {

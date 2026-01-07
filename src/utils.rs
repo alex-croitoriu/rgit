@@ -7,7 +7,6 @@ use std::{env, fs};
 use anyhow::{Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose;
-use similar::{ChangeTag, TextDiff};
 
 use crate::index::Index;
 use crate::object_store::{Object, Tree, TreeEntry};
@@ -172,47 +171,6 @@ pub fn get_unstaged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf
     Ok((added, deleted, modified))
 }
 
-pub fn diff_indices(
-    from: &Index,
-    to: &Index,
-) -> Result<(
-    Vec<(PathBuf, String)>,
-    Vec<(PathBuf, String)>,
-    Vec<(PathBuf, String)>,
-)> {
-    let (mut added, mut deleted, mut modified) = (Vec::new(), Vec::new(), Vec::new());
-
-    for (name, from_entry) in &from.entries {
-        if let Some(to_entry) = to.entries.get(name) {
-            if from_entry.hash != to_entry.hash {
-                modified.push((name.clone(), diff(&from_entry.hash, &to_entry.hash)?));
-            }
-        } else if let Ok(from_content) = get_blob_content(&from_entry.hash) {
-            deleted.push((name.clone(), generate_diff(&from_content, "")));
-        } else {
-            deleted.push((name.clone(), String::from("Binary file")));
-        }
-    }
-
-    for (name, to_entry) in &to.entries {
-        if !from.entries.contains_key(name) {
-            if let Ok(to_content) = get_blob_content(&to_entry.hash) {
-                added.push((name.clone(), generate_diff("", &to_content)));
-            } else {
-                added.push((name.clone(), String::from("Binary file")));
-            }
-        }
-    }
-
-    Ok((added, deleted, modified))
-}
-
-pub fn diff(from: &str, to: &str) -> Result<String> {
-    let from_content = get_blob_content(from)?;
-    let to_content = get_blob_content(to)?;
-    Ok(generate_diff(&from_content, &to_content))
-}
-
 pub fn get_blob_content(hash: &str) -> Result<String> {
     let bytes = get_blob_bytes(hash)?;
     if let Ok(content) = String::from_utf8(bytes) {
@@ -227,22 +185,8 @@ pub fn get_blob_bytes(hash: &str) -> Result<Vec<u8>> {
         let bytes = general_purpose::STANDARD.decode(blob.content)?;
         Ok(bytes)
     } else {
-        Err(anyhow!("Object {} is not a blob", hash))
+        Err(anyhow!("Object is not a blob: {hash}"))
     }
-}
-
-fn generate_diff(from: &str, to: &str) -> String {
-    let diff = TextDiff::from_lines(from, to);
-    let mut output = String::new();
-    for change in diff.iter_all_changes() {
-        let sign = match change.tag() {
-            ChangeTag::Delete => "- ",
-            ChangeTag::Insert => "+ ",
-            ChangeTag::Equal => "  ",
-        };
-        output.push_str(&format!("{}{}", sign, change));
-    }
-    output
 }
 
 pub fn get_ignored() -> Option<Vec<PathBuf>> {

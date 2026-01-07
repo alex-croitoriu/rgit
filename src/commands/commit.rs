@@ -6,20 +6,28 @@ use anyhow::Result;
 use crate::{
     index::Index,
     object_store::{Commit, Object},
-    utils::{create_tree_from_index, get_current_branch_path},
+    utils::{create_tree_from_index, get_current_branch_path, get_repository_root},
 };
 
 pub fn commit(message: &str) -> Result<String> {
     let index = Index::load()?;
+    let root = get_repository_root()?;
 
     let tree_hash = create_tree_from_index(&index)?;
-    let parent_hashes = if let Ok(path) = get_current_branch_path()
+
+    let merge_head_path = root.join(".rgit/MERGE_HEAD");
+    let mut parent_hashes = if let Ok(path) = get_current_branch_path()
         && path.exists()
     {
         vec![fs::read_to_string(path)?]
     } else {
         Vec::new()
     };
+
+    if merge_head_path.exists() {
+        parent_hashes.push(fs::read_to_string(&merge_head_path)?);
+        fs::remove_file(merge_head_path)?;
+    }
 
     let commit_object = Object::Commit(Commit {
         message: message.to_string(),

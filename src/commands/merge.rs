@@ -34,12 +34,11 @@ pub fn merge(target: &str) -> Result<String> {
     let target_path = get_branch_path(target)?;
 
     if !target_path.exists() {
-        return Err(anyhow!("Branch '{}' does not exist", target));
+        return Err(anyhow!("Branch does not exist: '{target}'"));
     }
     let target_hash = fs::read_to_string(&target_path)?;
 
     if is_ancestor(&current_hash, &target_hash)? {
-        println!("Fast-forward merge");
         fs::write(&current_branch_path, &target_hash)?;
 
         let target_index = Index::restore_from_commit(&target_hash)?;
@@ -56,11 +55,18 @@ pub fn merge(target: &str) -> Result<String> {
     let head_index = Index::restore_from_commit(&current_hash)?;
     let target_index = Index::restore_from_commit(&target_hash)?;
 
-    let (mut merged_index, conflicts) = three_way_merge(&base_index, &head_index, &target_index)?;
+    let (mut merged_index, conflicts) = three_way_merge(&base_index, &head_index, &target_index);
 
     if !conflicts.is_empty() {
         write_conflict_markers(&conflicts, &head_index, &target_index)?;
-        return Err(anyhow!("Merge conflicts in: {:?}", conflicts));
+
+        let root = get_repository_root()?;
+        fs::write(root.join(".rgit/MERGE_HEAD"), &target_hash)?;
+
+        update_working_directory(&mut merged_index, &head_index)?;
+        merged_index.store()?;
+
+        return Err(anyhow!("Merge conflicts in: {conflicts:?}"));
     }
 
     let tree_hash = create_tree_from_index(&merged_index)?;
@@ -68,7 +74,7 @@ pub fn merge(target: &str) -> Result<String> {
 
     let commit = Commit {
         tree_hash,
-        message: format!("Merge branch '{}'", target),
+        message: format!("Merge branch '{target}'"),
         timestamp: SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_secs(),
@@ -140,7 +146,7 @@ fn find_common_ancestor(hash1: &str, hash2: &str) -> Result<String> {
     Err(anyhow!("No common ancestor found"))
 }
 
-fn three_way_merge(base: &Index, head: &Index, target: &Index) -> Result<(Index, Vec<PathBuf>)> {
+fn three_way_merge(base: &Index, head: &Index, target: &Index) -> (Index, Vec<PathBuf>) {
     let mut merged = Index::new();
     let mut conflicts = Vec::new();
 
@@ -199,7 +205,7 @@ fn three_way_merge(base: &Index, head: &Index, target: &Index) -> Result<(Index,
         }
     }
 
-    Ok((merged, conflicts))
+    (merged, conflicts)
 }
 
 fn write_conflict_markers(conflicts: &[PathBuf], head: &Index, target: &Index) -> Result<()> {
@@ -217,10 +223,7 @@ fn write_conflict_markers(conflicts: &[PathBuf], head: &Index, target: &Index) -
             String::new()
         };
 
-        let content = format!(
-            "<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>>\n",
-            head_content, target_content
-        );
+        let content = format!("<<<<<<< HEAD\n{head_content}\n=======\n{target_content}\n>>>>>>>\n");
 
         let full_path = root.join(path);
         if let Some(parent) = full_path.parent() {
