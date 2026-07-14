@@ -10,8 +10,8 @@ sha1 = "0.10.6"
 flate2 = { version = "1.0.17", features = ["zlib-rs"], default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.148", features = ["preserve_order"] }
-base64 = "0.22.1"
 similar = "2.7.0"
+wincode = { version = "0.5.5", features = ["derive"] }
 
 # [profile.release]
 # lto = true

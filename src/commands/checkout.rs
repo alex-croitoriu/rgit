@@ -3,13 +3,16 @@ use std::fs;
 use anyhow::{Result, anyhow};
 
 use crate::{
-    index::Index,
+    commands::create,
+    state::Index,
     utils::{
         get_branch_path, get_current_branch_path, get_repository_root, get_staged_changes,
-        get_unstaged_changes, update_working_directory,
+        get_unstaged_changes, update_working_tree,
     },
 };
 
+// TODO: refactor this garbage
+// TODO: add checkout on commits
 pub fn checkout(target: &str) -> Result<()> {
     let staged_changes = get_staged_changes()?;
     let unstaged_changes = get_unstaged_changes()?;
@@ -28,15 +31,16 @@ pub fn checkout(target: &str) -> Result<()> {
         if branch_path == get_current_branch_path()? {
             return Err(anyhow!("Unable to checkout: already on that branch"));
         }
+
         if !branch_path.exists() {
-            return Err(anyhow!("Unable to checkout: branch does not exist"));
+            create(target)?;
         }
 
         let target_hash = fs::read_to_string(branch_path)?;
         let current_index = Index::load()?;
         let mut target_index = Index::restore_from_commit(&target_hash)?;
 
-        update_working_directory(&mut target_index, &current_index)?;
+        update_working_tree(&mut target_index, &current_index)?;
         target_index.store()?;
 
         let root = get_repository_root()?;

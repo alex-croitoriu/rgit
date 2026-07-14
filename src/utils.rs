@@ -5,11 +5,8 @@ use std::time::SystemTime;
 use std::{env, fs};
 
 use anyhow::{Result, anyhow};
-use base64::Engine;
-use base64::engine::general_purpose;
 
-use crate::index::Index;
-use crate::object_store::{Object, Tree, TreeEntry};
+use crate::state::{Index, Object};
 
 pub fn get_repository_root() -> Result<PathBuf> {
     let mut path = env::current_dir()?;
@@ -38,7 +35,7 @@ pub fn normalize_path(path: &Path) -> PathBuf {
             Component::ParentDir => {
                 result.pop();
             }
-            _ => result.push(component.as_os_str()),
+            _ => result.push(component),
         }
     }
     result
@@ -182,8 +179,7 @@ pub fn get_blob_content(hash: &str) -> Result<String> {
 
 pub fn get_blob_bytes(hash: &str) -> Result<Vec<u8>> {
     if let Object::Blob(blob) = Object::load(hash)? {
-        let bytes = general_purpose::STANDARD.decode(blob.content)?;
-        Ok(bytes)
+        Ok(blob.content)
     } else {
         Err(anyhow!("Object is not a blob: {hash}"))
     }
@@ -200,7 +196,7 @@ pub fn get_ignored() -> Option<Vec<PathBuf>> {
     Some(ignored)
 }
 
-pub fn update_working_directory(index: &mut Index, old_index: &Index) -> Result<()> {
+pub fn update_working_tree(index: &mut Index, old_index: &Index) -> Result<()> {
     let root = get_repository_root()?;
 
     for path in old_index.entries.keys() {
@@ -225,75 +221,4 @@ pub fn update_working_directory(index: &mut Index, old_index: &Index) -> Result<
     }
 
     Ok(())
-}
-
-pub fn create_tree_from_index(index: &Index) -> Result<String> {
-    let mut stack = Vec::<(String, Tree)>::new();
-    stack.push((
-        String::from("root"),
-        Tree {
-            entries: Vec::new(),
-        },
-    ));
-
-    for (name, entry) in &index.entries {
-        let path = PathBuf::from(name);
-        let components = path
-            .components()
-            .filter_map(|c| c.as_os_str().to_str())
-            .collect::<Vec<_>>();
-
-        let file = components
-            .last()
-            .ok_or(anyhow!("Last element not found"))?
-            .to_string();
-        let mut i = 0;
-
-        while i + 1 < stack.len() && i < components.len() && stack[i + 1].0 == components[i] {
-            i += 1;
-        }
-
-        while i + 1 < stack.len() {
-            if let Some(last) = stack.pop()
-                && let Some(second_to_last) = stack.last_mut()
-            {
-                second_to_last.1.entries.push(TreeEntry {
-                    object_type: String::from("Tree"),
-                    object_hash: Object::Tree(last.1).store()?,
-                    name: last.0,
-                });
-            }
-        }
-
-        stack.extend(components[i..components.len() - 1].iter().map(|c| {
-            (
-                c.to_string(),
-                Tree {
-                    entries: Vec::new(),
-                },
-            )
-        }));
-
-        if let Some(last) = stack.last_mut() {
-            last.1.entries.push(TreeEntry {
-                object_type: String::from("Blob"),
-                object_hash: entry.hash.clone(),
-                name: file,
-            });
-        }
-    }
-
-    while 1 < stack.len() {
-        if let Some(last) = stack.pop()
-            && let Some(second_to_last) = stack.last_mut()
-        {
-            second_to_last.1.entries.push(TreeEntry {
-                object_type: String::from("Tree"),
-                object_hash: Object::Tree(last.1).store()?,
-                name: last.0,
-            });
-        }
-    }
-
-    Object::Tree(stack.pop().ok_or(anyhow!("Error at pop stack"))?.1).store()
 }

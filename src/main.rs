@@ -1,15 +1,12 @@
 mod args;
 mod commands;
-mod index;
-mod object_store;
+mod state;
 mod utils;
 
-use args::{Cli, Commands};
+use args::{BranchSubcommands, Cli, Commands};
 use clap::Parser;
 
-use commands::*;
-
-use crate::args::BranchSubcommands;
+use crate::commands::*;
 
 fn main() {
     let cli = Cli::parse();
@@ -23,14 +20,10 @@ fn main() {
             Ok(status) => println!("{status}"),
             Err(e) => println!("{e}"),
         },
-        Commands::Add { paths } => {
-            for path in paths {
-                match add(&path) {
-                    Ok(()) => println!("Added '{path}' to the index"),
-                    Err(e) => println!("{e}"),
-                }
-            }
-        }
+        Commands::Add { paths } => match add(paths) {
+            Ok(()) => println!("Added paths to the index"),
+            Err(e) => println!("{e}"),
+        },
         Commands::Commit { message } => match commit(&message) {
             Ok(hash) => println!("Commit: {hash}"),
             Err(e) => println!("{e}"),

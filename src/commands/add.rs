@@ -63,7 +63,7 @@ pub fn add_recursive(index: &mut Index, path: &str) -> Result<()> {
         });
 
         let hash = blob.store()?;
-        
+
         // TODO: add only if needed
         index.add(
             relative_path,

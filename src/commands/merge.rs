@@ -5,16 +5,15 @@ use std::time::SystemTime;
 
 use anyhow::{Result, anyhow};
 
-use crate::utils::{create_tree_from_index, update_working_directory};
 use crate::{
-    index::Index,
-    object_store::{Commit, Object},
+    state::{Commit, Index, Object},
     utils::{
         get_blob_content, get_branch_path, get_current_branch_path, get_repository_root,
-        get_staged_changes, get_unstaged_changes,
+        get_staged_changes, get_unstaged_changes, update_working_tree,
     },
 };
 
+// TODO: refactor this garbage
 pub fn merge(target: &str) -> Result<String> {
     let staged_changes = get_staged_changes()?;
     let unstaged_changes = get_unstaged_changes()?;
@@ -43,7 +42,7 @@ pub fn merge(target: &str) -> Result<String> {
 
         let target_index = Index::restore_from_commit(&target_hash)?;
         let current_index = Index::load()?;
-        update_working_directory(&mut target_index.clone(), &current_index)?;
+        update_working_tree(&mut target_index.clone(), &current_index)?;
         target_index.store()?;
 
         return Ok(target_hash);
@@ -61,7 +60,7 @@ pub fn merge(target: &str) -> Result<String> {
         let root = get_repository_root()?;
         fs::write(root.join(".rgit/MERGE_HEAD"), &target_hash)?;
 
-        update_working_directory(&mut merged_index, &head_index)?;
+        update_working_tree(&mut merged_index, &head_index)?;
         merged_index.store()?;
 
         write_conflict_markers(conflicts.clone(), &head_index, &target_index)?;
@@ -78,7 +77,7 @@ pub fn merge(target: &str) -> Result<String> {
         ));
     }
 
-    let tree_hash = create_tree_from_index(&merged_index)?;
+    let tree_hash = merged_index.store_tree()?;
     let parent_hashes = vec![current_hash.clone(), target_hash.clone()];
 
     let commit = Commit {
@@ -93,7 +92,7 @@ pub fn merge(target: &str) -> Result<String> {
     let commit_hash = Object::Commit(commit).store()?;
     fs::write(current_branch_path, &commit_hash)?;
 
-    update_working_directory(&mut merged_index, &head_index)?;
+    update_working_tree(&mut merged_index, &head_index)?;
     merged_index.store()?;
 
     Ok(commit_hash)

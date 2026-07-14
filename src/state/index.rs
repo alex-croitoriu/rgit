@@ -1,12 +1,13 @@
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
-use crate::object_store::Object;
-use crate::utils::get_repository_root;
+use anyhow::{Result, anyhow};
+use serde::{Deserialize, Serialize};
+
+use crate::state::{Tree, TreeEntry};
+use crate::{state::Object, utils::get_repository_root};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IndexEntry {
@@ -20,6 +21,7 @@ pub struct Index {
     pub entries: BTreeMap<PathBuf, IndexEntry>,
 }
 
+// TODO: replace json serialization with a better alternative (maybe wincode)
 impl Index {
     pub fn new() -> Self {
         Index {
@@ -33,7 +35,7 @@ impl Index {
             .read(true)
             .open(root.join(".rgit/index"))?;
         let reader = BufReader::new(file);
-        let index: Index = serde_json::from_reader(reader).unwrap_or(Index::new());
+        let index = serde_json::from_reader(reader).unwrap_or(Index::new());
 
         Ok(index)
     }
@@ -94,5 +96,76 @@ impl Index {
         }
 
         Ok(index)
+    }
+
+    pub fn store_tree(&self) -> Result<String> {
+        let mut stack = Vec::<(String, Tree)>::new();
+        stack.push((
+            String::from("root"),
+            Tree {
+                entries: Vec::new(),
+            },
+        ));
+
+        for (name, entry) in &self.entries {
+            let path = PathBuf::from(name);
+            let components = path
+                .components()
+                .filter_map(|c| c.as_os_str().to_str())
+                .collect::<Vec<_>>();
+
+            let file = components
+                .last()
+                .ok_or(anyhow!("Last element not found"))?
+                .to_string();
+            let mut i = 0;
+
+            while i + 1 < stack.len() && i < components.len() && stack[i + 1].0 == components[i] {
+                i += 1;
+            }
+
+            while i + 1 < stack.len() {
+                if let Some(last) = stack.pop()
+                    && let Some(second_to_last) = stack.last_mut()
+                {
+                    second_to_last.1.entries.push(TreeEntry {
+                        object_type: String::from("Tree"),
+                        object_hash: Object::Tree(last.1).store()?,
+                        name: last.0,
+                    });
+                }
+            }
+
+            stack.extend(components[i..components.len() - 1].iter().map(|c| {
+                (
+                    c.to_string(),
+                    Tree {
+                        entries: Vec::new(),
+                    },
+                )
+            }));
+
+            if let Some(last) = stack.last_mut() {
+                last.1.entries.push(TreeEntry {
+                    object_type: String::from("Blob"),
+                    object_hash: entry.hash.clone(),
+                    name: file,
+                });
+            }
+        }
+
+        while 1 < stack.len() {
+            if let Some(last) = stack.pop()
+                && let Some(second_to_last) = stack.last_mut()
+            {
+                second_to_last.1.entries.push(TreeEntry {
+                    object_type: String::from("Tree"),
+                    object_hash: Object::Tree(last.1).store()?,
+                    name: last.0,
+                });
+            }
+        }
+
+        Object::Tree(stack.pop().ok_or(anyhow!("Error at pop stack"))?.1).store()
     }
 }

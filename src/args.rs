@@ -9,7 +9,6 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
-
 pub enum Commands {
     /// Initialize an empty repository
     Init,
@@ -22,11 +21,11 @@ pub enum Commands {
     },
     /// Record changes to the repository
     Commit { message: String },
-    /// Show changes between index and the previous commit or a branch
+    /// Show changes between the index and the last commit or between the index and a branch
     Diff { target: Option<String> },
     /// Switch to another branch
     Checkout { target: String },
-    /// Create or delete branches
+    /// List, create or delete branches
     #[command(subcommand)]
     Branch(BranchSubcommands),
     /// Merge another branch into the current one

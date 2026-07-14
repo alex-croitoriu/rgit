@@ -1,3 +1,5 @@
+// TODO: dynamic command dispatch with an executable trait
+
 mod add;
 mod branch;
 mod checkout;

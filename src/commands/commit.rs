@@ -4,16 +4,15 @@ use std::time::SystemTime;
 use anyhow::Result;
 
 use crate::{
-    index::Index,
-    object_store::{Commit, Object},
-    utils::{create_tree_from_index, get_current_branch_path, get_repository_root},
+    state::{Commit, Index, Object},
+    utils::{get_current_branch_path, get_repository_root},
 };
 
 pub fn commit(message: &str) -> Result<String> {
     let index = Index::load()?;
     let root = get_repository_root()?;
 
-    let tree_hash = create_tree_from_index(&index)?;
+    let tree_hash = index.store_tree()?;
 
     let merge_head_path = root.join(".rgit/MERGE_HEAD");
     let mut parent_hashes = if let Ok(path) = get_current_branch_path()

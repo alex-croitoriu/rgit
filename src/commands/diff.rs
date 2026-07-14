@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use similar::{ChangeTag, TextDiff};
 
 use crate::{
-    index::Index,
+    state::Index,
     utils::{get_blob_content, get_branch_path, get_current_branch_path},
 };
 
