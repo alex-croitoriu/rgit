@@ -3,49 +3,56 @@ use std::fs;
 use anyhow::{Result, anyhow};
 
 use crate::{
-    commands::create,
-    state::Index,
-    utils::{
-        get_branch_path, get_current_branch_path, get_repository_root, get_staged_changes,
-        get_unstaged_changes, update_working_tree,
-    },
+    commands::{BranchCreateCommand, Command, CommandOutput},
+    state::Repository,
+    utils::{get_staged_changes, get_unstaged_changes, update_working_tree},
 };
 
-// TODO: refactor this garbage
-// TODO: add checkout on commits
-pub fn checkout(target: &str) -> Result<()> {
-    let staged_changes = get_staged_changes()?;
-    let unstaged_changes = get_unstaged_changes()?;
+pub struct CheckoutCommand {
+    pub target: String,
+}
 
-    if !(staged_changes.0.is_empty()
-        && staged_changes.1.is_empty()
-        && staged_changes.2.is_empty()
-        && unstaged_changes.0.is_empty()
-        && unstaged_changes.1.is_empty()
-        && unstaged_changes.2.is_empty())
-    {
-        return Err(anyhow!("Unable to checkout: uncommited changes"));
-    }
+impl Command for CheckoutCommand {
+    // TODO: refactor this garbage
+    // TODO: add checkout on commits
+    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
+        let staged_changes = get_staged_changes(repository)?;
+        let unstaged_changes = get_unstaged_changes(repository)?;
 
-    if let Ok(branch_path) = get_branch_path(target) {
-        if branch_path == get_current_branch_path()? {
+        if !(staged_changes.0.is_empty()
+            && staged_changes.1.is_empty()
+            && staged_changes.2.is_empty()
+            && unstaged_changes.0.is_empty()
+            && unstaged_changes.1.is_empty()
+            && unstaged_changes.2.is_empty())
+        {
+            return Err(anyhow!("Unable to checkout: uncommited changes"));
+        }
+
+        let branch_path = repository.branch_path(&self.target);
+        if branch_path == repository.current_branch_path()? {
             return Err(anyhow!("Unable to checkout: already on that branch"));
         }
 
         if !branch_path.exists() {
-            create(target)?;
+            BranchCreateCommand {
+                name: self.target.clone(),
+            }
+            .execute(repository)?;
         }
 
         let target_hash = fs::read_to_string(branch_path)?;
-        let current_index = Index::load()?;
-        let mut target_index = Index::restore_from_commit(&target_hash)?;
+        let current_index = repository.load_index()?;
+        let mut target_index = repository.load_index_from_commit(&target_hash)?;
 
-        update_working_tree(&mut target_index, &current_index)?;
-        target_index.store()?;
+        update_working_tree(repository, &mut target_index, &current_index)?;
+        repository.store_index(&target_index)?;
 
-        let root = get_repository_root()?;
-        fs::write(root.join(".rgit/HEAD"), format!("ref: refs/heads/{target}"))?;
+        fs::write(
+            repository.head_path(),
+            format!("ref: refs/heads/{}", self.target),
+        )?;
+
+        Ok(CommandOutput::Empty)
     }
-
-    Ok(())
 }

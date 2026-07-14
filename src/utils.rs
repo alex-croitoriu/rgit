@@ -1,31 +1,10 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
-use std::{env, fs};
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
-use crate::state::{Index, Object};
-
-pub fn get_repository_root() -> Result<PathBuf> {
-    let mut path = env::current_dir()?;
-    loop {
-        if is_repository_root(&path) {
-            return Ok(path);
-        }
-        if !path.pop() {
-            return Err(anyhow!("Repository not found"));
-        }
-    }
-}
-
-pub fn is_repository_root(path: &Path) -> bool {
-    path.join(".rgit/objects").is_dir()
-        && path.join(".rgit/refs/heads").is_dir()
-        && path.join(".rgit/index").is_file()
-        && path.join(".rgit/HEAD").is_file()
-}
+use crate::state::{Index, Repository};
 
 pub fn normalize_path(path: &Path) -> PathBuf {
     let mut result = PathBuf::new();
@@ -41,7 +20,7 @@ pub fn normalize_path(path: &Path) -> PathBuf {
     result
 }
 
-pub fn get_mtime(path: &Path) -> Result<u64> {
+pub fn modification_time(path: &Path) -> Result<u64> {
     Ok(path
         .metadata()?
         .modified()?
@@ -49,42 +28,15 @@ pub fn get_mtime(path: &Path) -> Result<u64> {
         .as_secs())
 }
 
-pub fn get_current_branch_name() -> Result<String> {
-    let root = get_repository_root()?;
-    if let Some(head) = fs::read_to_string(root.join(".rgit/HEAD"))?.strip_prefix("ref: ") {
-        let current_branch = PathBuf::from(head)
-            .file_name()
-            .ok_or(anyhow!("Current branch not found"))?
-            .to_string_lossy()
-            .to_string();
-        Ok(current_branch)
-    } else {
-        Err(anyhow!("Corrupt HEAD file"))
-    }
-}
-
-pub fn get_current_branch_path() -> Result<PathBuf> {
-    let root = get_repository_root()?;
-    if let Some(head) = fs::read_to_string(root.join(".rgit/HEAD"))?.strip_prefix("ref: ") {
-        let path = normalize_path(&root.join(".rgit").join(head));
-        Ok(path)
-    } else {
-        Err(anyhow!("Corrupt HEAD file"))
-    }
-}
-
-pub fn get_branch_path(name: &str) -> Result<PathBuf> {
-    let root = get_repository_root()?;
-    Ok(normalize_path(&root.join(".rgit/refs/heads").join(name)))
-}
-
-pub fn get_staged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
+pub fn get_staged_changes(
+    repository: &Repository,
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
     let (mut added, mut deleted, mut modified) = (Vec::new(), Vec::new(), Vec::new());
 
-    let current_index = Index::load()?;
-    let head_path = get_current_branch_path()?;
+    let current_index = repository.load_index()?;
+    let head_path = repository.current_branch_path()?;
     let head_index = if let Ok(head_hash) = fs::read_to_string(head_path) {
-        Index::restore_from_commit(&head_hash)?
+        repository.load_index_from_commit(&head_hash)?
     } else {
         Index::new()
     };
@@ -108,20 +60,22 @@ pub fn get_staged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)
     Ok((added, deleted, modified))
 }
 
-pub fn get_unstaged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
+pub fn get_unstaged_changes(
+    repository: &Repository,
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
     let (mut added, mut deleted, mut modified) = (Vec::new(), Vec::new(), Vec::new());
 
-    let ignored = get_ignored();
-    let index = Index::load()?;
-    let root = get_repository_root()?;
-    let mut stack = vec![root.clone()];
+    let index = repository.load_index()?;
+    let mut stack = vec![repository.root.clone()];
 
     while !stack.is_empty() {
         if let Some(path) = stack.pop() {
             if path.is_file() {
-                let relative_path = path.strip_prefix(&root)?;
+                let relative_path = path.strip_prefix(&repository.root)?;
                 if let Some(entry) = index.entries.get(relative_path) {
-                    if entry.size != path.metadata()?.len() || entry.mtime != get_mtime(&path)? {
+                    if entry.size != path.metadata()?.len()
+                        || entry.mtime != modification_time(&path)?
+                    {
                         modified.push(relative_path.to_path_buf());
                     }
                 } else {
@@ -130,13 +84,15 @@ pub fn get_unstaged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf
             } else if path.is_dir() {
                 for entry in path.read_dir()?.flatten() {
                     let entry_path = entry.path();
-                    let relative_path = entry_path.strip_prefix(&root)?;
+                    let relative_path = entry_path.strip_prefix(&repository.root)?;
 
                     if relative_path == ".rgit" {
                         continue;
                     }
-                    if let Some(ignored) = &ignored
-                        && ignored.iter().any(|p| relative_path.starts_with(p))
+                    if repository
+                        .ignored
+                        .iter()
+                        .any(|p| relative_path.starts_with(p))
                     {
                         continue;
                     }
@@ -160,7 +116,7 @@ pub fn get_unstaged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf
     }
 
     for (name, _) in index.entries {
-        if !root.join(&name).exists() {
+        if !repository.root.join(&name).exists() {
             deleted.push(name);
         }
     }
@@ -168,40 +124,14 @@ pub fn get_unstaged_changes() -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf
     Ok((added, deleted, modified))
 }
 
-pub fn get_blob_content(hash: &str) -> Result<String> {
-    let bytes = get_blob_bytes(hash)?;
-    if let Ok(content) = String::from_utf8(bytes) {
-        Ok(content)
-    } else {
-        Ok(String::from("Binary file"))
-    }
-}
-
-pub fn get_blob_bytes(hash: &str) -> Result<Vec<u8>> {
-    if let Object::Blob(blob) = Object::load(hash)? {
-        Ok(blob.content)
-    } else {
-        Err(anyhow!("Object is not a blob: {hash}"))
-    }
-}
-
-pub fn get_ignored() -> Option<Vec<PathBuf>> {
-    let mut ignored = Vec::new();
-    let file = File::open(get_repository_root().ok()?.join(".rgitignore")).ok()?;
-    let reader = BufReader::new(file);
-
-    for line in reader.lines().map_while(Result::ok) {
-        ignored.push(PathBuf::from(line));
-    }
-    Some(ignored)
-}
-
-pub fn update_working_tree(index: &mut Index, old_index: &Index) -> Result<()> {
-    let root = get_repository_root()?;
-
+pub fn update_working_tree(
+    repository: &Repository,
+    index: &mut Index,
+    old_index: &Index,
+) -> Result<()> {
     for path in old_index.entries.keys() {
         if !index.entries.contains_key(path) {
-            let absolute_path = root.join(path);
+            let absolute_path = repository.root.join(path);
             if absolute_path.exists() {
                 fs::remove_file(absolute_path)?;
             }
@@ -209,14 +139,14 @@ pub fn update_working_tree(index: &mut Index, old_index: &Index) -> Result<()> {
     }
 
     for (path, entry) in &mut index.entries {
-        let content = get_blob_bytes(&entry.hash)?;
-        let absolute_path = root.join(path);
+        let bytes = repository.load_blob_bytes(&entry.hash)?;
+        let absolute_path = repository.root.join(path);
         if let Some(parent) = absolute_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&absolute_path, content)?;
+        fs::write(&absolute_path, bytes)?;
 
-        entry.mtime = get_mtime(&absolute_path)?;
+        entry.mtime = modification_time(&absolute_path)?;
         entry.size = fs::metadata(&absolute_path)?.len();
     }
 

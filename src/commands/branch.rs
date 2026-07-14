@@ -2,61 +2,70 @@ use std::fs;
 
 use anyhow::{Result, anyhow};
 
-use crate::utils::{get_current_branch_name, get_repository_root};
+use crate::{
+    commands::{Command, CommandOutput},
+    state::Repository,
+};
 
-pub fn list() -> Result<Vec<String>> {
-    let root = get_repository_root()?;
-    let mut branches = Vec::new();
-    let current_branch = get_current_branch_name()?;
-    branches.push(format!("{current_branch} -> HEAD"));
+pub struct BranchListCommand {}
 
-    for entry in root.join(".rgit/refs/heads").read_dir()?.flatten() {
-        let file_name = entry
-            .file_name()
-            .into_string()
-            .map_err(|_| anyhow!("Invalid UTF-8"))?;
-        if file_name != current_branch {
-            branches.push(file_name);
-        }
-    }
-    Ok(branches)
+pub struct BranchCreateCommand {
+    pub name: String,
 }
 
-pub fn create(name: &str) -> Result<()> {
-    let root = get_repository_root()?;
+pub struct BranchDeleteCommand {
+    pub name: String,
+}
 
-    let branch_path = root.join(".rgit/refs/heads").join(name);
+impl Command for BranchListCommand {
+    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
+        let mut branches = Vec::new();
+        let current_branch_name = repository.current_branch_name()?;
+        branches.push(format!("{current_branch_name} -> HEAD"));
 
-    if branch_path.exists() {
-        return Err(anyhow!("Branch already exists : '{name}'"));
+        for entry in repository.heads_path().read_dir()?.flatten() {
+            let file_name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| anyhow!("Invalid UTF-8"))?;
+            if file_name != current_branch_name {
+                branches.push(file_name);
+            }
+        }
+        Ok(CommandOutput::List(branches))
     }
+}
 
-    if let Some(head) = fs::read_to_string(root.join(".rgit/HEAD"))?.strip_prefix("ref: ") {
-        let path = get_repository_root()?.join(".rgit").join(head);
-        let commit_hash =
-            fs::read_to_string(path).map_err(|_| anyhow!("Branch not created: no commits yet"))?;
+impl Command for BranchCreateCommand {
+    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
+        let branch_path = repository.branch_path(&self.name);
+        if branch_path.exists() {
+            return Err(anyhow!("Branch already exists: '{}'", self.name));
+        }
+
+        let current_branch_path = repository.current_branch_path()?;
+        let commit_hash = fs::read_to_string(current_branch_path)
+            .map_err(|_| anyhow!("Branch not created: no commits yet"))?;
         fs::write(branch_path, commit_hash)?;
-    }
 
-    Ok(())
+        Ok(CommandOutput::Empty)
+    }
 }
 
-pub fn delete(name: &str) -> Result<()> {
-    let root = get_repository_root()?;
-
-    let branch_path = root.join(".rgit/refs/heads").join(name);
-    if !branch_path.exists() {
-        return Err(anyhow!("Branch doest not exist: '{name}'"));
-    }
-
-    if let Some(head) = fs::read_to_string(root.join(".rgit/HEAD"))?.strip_prefix("ref: ") {
-        let path = get_repository_root()?.join(".rgit").join(head);
-        if path == branch_path {
-            return Err(anyhow!("Unable to delete the current branch"));
-        } else {
-            fs::remove_file(branch_path)?;
+impl Command for BranchDeleteCommand {
+    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
+        let branch_path = repository.branch_path(&self.name);
+        if !branch_path.exists() {
+            return Err(anyhow!("Branch doesn't not exist: '{}'", self.name));
         }
-    }
 
-    Ok(())
+        let current_branch_path = repository.current_branch_path()?;
+        if current_branch_path == branch_path {
+            return Err(anyhow!("Unable to delete the current branch"));
+        }
+
+        fs::remove_file(branch_path)?;
+
+        Ok(CommandOutput::Empty)
+    }
 }

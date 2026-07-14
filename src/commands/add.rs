@@ -4,35 +4,35 @@ use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 
+use crate::commands::CommandOutput;
 use crate::{
-    state::{Blob, Index, IndexEntry, Object},
-    utils::{get_ignored, get_mtime, get_repository_root, normalize_path},
+    commands::Command,
+    state::{Blob, Index, IndexEntry, Object, Repository},
+    utils::{modification_time, normalize_path},
 };
-
-// TODO: add detailed feedback on individual added files
-pub fn add(paths: Vec<String>) -> Result<()> {
-    let mut index = Index::load()?;
-    let mut paths = paths;
-
-    paths.sort();
-    paths.dedup();
-
-    for path in &paths {
-        add_recursive(&mut index, path)?;
-    }
-
-    index.store()?;
-
-    Ok(())
+pub struct AddCommand {
+    pub paths: Vec<String>,
 }
 
-pub fn add_recursive(index: &mut Index, path: &str) -> Result<()> {
-    let root = get_repository_root()?;
-    let absolute_path = normalize_path(&env::current_dir()?.join(path));
-    let relative_path = absolute_path.strip_prefix(&root)?;
+impl Command for AddCommand {
+    // TODO: add detailed feedback on individual added files
+    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
+        let mut index = repository.load_index()?;
+        self.paths.sort();
+        self.paths.dedup();
 
-    // TODO: cache within a repository global state
-    let ignored = get_ignored();
+        for path in &self.paths {
+            add_recursive(repository, &mut index, path)?;
+        }
+
+        repository.store_index(&index)?;
+        Ok(CommandOutput::Empty)
+    }
+}
+
+pub fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Result<()> {
+    let absolute_path = normalize_path(&env::current_dir()?.join(path));
+    let relative_path = absolute_path.strip_prefix(&repository.root)?;
 
     if !absolute_path.exists() {
         let to_remove = index
@@ -52,17 +52,19 @@ pub fn add_recursive(index: &mut Index, path: &str) -> Result<()> {
     }
 
     if absolute_path.is_file() {
-        if let Some(ignored) = ignored
-            && ignored.iter().any(|p| relative_path.starts_with(p))
+        if repository
+            .ignored
+            .iter()
+            .any(|p| relative_path.starts_with(p))
         {
             return Err(anyhow!("Ignored path: '{}'", relative_path.display()));
         }
 
         let blob = Object::Blob(Blob {
-            content: fs::read(&absolute_path)?,
+            bytes: fs::read(&absolute_path)?,
         });
 
-        let hash = blob.store()?;
+        let hash = repository.store_object(&blob)?;
 
         // TODO: add only if needed
         index.add(
@@ -70,14 +72,14 @@ pub fn add_recursive(index: &mut Index, path: &str) -> Result<()> {
             IndexEntry {
                 hash,
                 size: absolute_path.metadata()?.len(),
-                mtime: get_mtime(&absolute_path)?,
+                mtime: modification_time(&absolute_path)?,
             },
-        )?;
+        );
     } else if absolute_path.is_dir() {
         let to_remove = index
             .entries
             .keys()
-            .filter(|p| p.starts_with(relative_path) && !root.join(p).exists())
+            .filter(|p| p.starts_with(relative_path) && !&repository.root.join(p).exists())
             .cloned()
             .collect::<Vec<PathBuf>>();
         for path in to_remove {
@@ -86,16 +88,22 @@ pub fn add_recursive(index: &mut Index, path: &str) -> Result<()> {
 
         for entry in absolute_path.read_dir()?.flatten() {
             let entry_path = entry.path();
-            let relative_entry_path = entry_path.strip_prefix(&root)?;
+            let relative_entry_path = entry_path.strip_prefix(&repository.root)?;
             if relative_entry_path == ".rgit" {
                 continue;
             }
-            if let Some(ignored) = &ignored
-                && ignored.iter().any(|p| relative_entry_path.starts_with(p))
+            if repository
+                .ignored
+                .iter()
+                .any(|p| relative_entry_path.starts_with(p))
             {
                 continue;
             }
-            add_recursive(index, entry.path().to_str().ok_or(anyhow!("Invalid path"))?)?;
+            add_recursive(
+                repository,
+                index,
+                entry.path().to_str().ok_or(anyhow!("Invalid path"))?,
+            )?;
         }
     } else {
         return Err(anyhow!("Invalid path: '{}'", relative_path.display()));

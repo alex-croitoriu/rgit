@@ -1,52 +1,60 @@
 use anyhow::Result;
 
-use crate::utils::{get_current_branch_name, get_staged_changes, get_unstaged_changes};
+use crate::{
+    commands::{Command, CommandOutput},
+    state::Repository,
+    utils::{get_staged_changes, get_unstaged_changes},
+};
 
-pub fn status() -> Result<String> {
-    let mut status = String::new();
-    let staged = get_staged_changes()?;
-    let unstaged = get_unstaged_changes()?;
+pub struct StatusCommand {}
 
-    let current_branch = get_current_branch_name()?;
-    status.push_str(format!("On branch {current_branch}").as_str());
+impl Command for StatusCommand {
+    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
+        let mut status = String::new();
+        let staged = get_staged_changes(repository)?;
+        let unstaged = get_unstaged_changes(repository)?;
 
-    if !(staged.0.is_empty() && staged.1.is_empty() && staged.2.is_empty()) {
-        status.push_str("\n\nStaged changes:");
-    }
-    for change in staged.0 {
-        if let Some(change) = change.to_str() {
-            status.push_str(format!("\n{:<11}{change}", "Added:").as_str());
-        }
-    }
-    for change in staged.1 {
-        if let Some(change) = change.to_str() {
-            status.push_str(format!("\n{:<11}{change}", "Deleted:").as_str());
-        }
-    }
-    for change in staged.2 {
-        if let Some(change) = change.to_str() {
-            status.push_str(format!("\n{:<11}{change}", "Modified:").as_str());
-        }
-    }
+        let current_branch_name = repository.current_branch_name()?;
+        status.push_str(format!("On branch {current_branch_name}").as_str());
 
-    if !(unstaged.0.is_empty() && unstaged.1.is_empty() && unstaged.2.is_empty()) {
-        status.push_str("\n\nUnstaged changes:");
-    }
-    for change in unstaged.0 {
-        if let Some(change) = change.to_str() {
-            status.push_str(format!("\n{:<11}{change}", "Added:").as_str());
+        if !(staged.0.is_empty() && staged.1.is_empty() && staged.2.is_empty()) {
+            status.push_str("\n\nStaged changes:");
         }
-    }
-    for change in unstaged.1 {
-        if let Some(change) = change.to_str() {
-            status.push_str(format!("\n{:<11}{change}", "Deleted:").as_str());
+        for change in staged.0 {
+            if let Some(change) = change.to_str() {
+                status.push_str(format!("\n{:<11}{change}", "Added:").as_str());
+            }
         }
-    }
-    for change in unstaged.2 {
-        if let Some(change) = change.to_str() {
-            status.push_str(format!("\n{:<11}{change}", "Modified:").as_str());
+        for change in staged.1 {
+            if let Some(change) = change.to_str() {
+                status.push_str(format!("\n{:<11}{change}", "Deleted:").as_str());
+            }
         }
-    }
+        for change in staged.2 {
+            if let Some(change) = change.to_str() {
+                status.push_str(format!("\n{:<11}{change}", "Modified:").as_str());
+            }
+        }
 
-    Ok(status)
+        if !(unstaged.0.is_empty() && unstaged.1.is_empty() && unstaged.2.is_empty()) {
+            status.push_str("\n\nUnstaged changes:");
+        }
+        for change in unstaged.0 {
+            if let Some(change) = change.to_str() {
+                status.push_str(format!("\n{:<11}{change}", "Added:").as_str());
+            }
+        }
+        for change in unstaged.1 {
+            if let Some(change) = change.to_str() {
+                status.push_str(format!("\n{:<11}{change}", "Deleted:").as_str());
+            }
+        }
+        for change in unstaged.2 {
+            if let Some(change) = change.to_str() {
+                status.push_str(format!("\n{:<11}{change}", "Modified:").as_str());
+            }
+        }
+
+        Ok(CommandOutput::FileDiff(status))
+    }
 }
