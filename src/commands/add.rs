@@ -4,18 +4,34 @@ use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 
-use crate::index::{Index, IndexEntry};
-use crate::object_store::{Blob, Object};
-use crate::utils::get_ignored;
-use crate::utils::get_mtime;
-use crate::utils::{get_repository_root, normalize_path};
-use base64::{Engine as _, engine::general_purpose};
+use crate::{
+    state::{Blob, Index, IndexEntry, Object},
+    utils::{get_ignored, get_mtime, get_repository_root, normalize_path},
+};
 
-pub fn add(path: &str) -> Result<()> {
+// TODO: add detailed feedback on individual added files
+pub fn add(paths: Vec<String>) -> Result<()> {
+    let mut index = Index::load()?;
+    let mut paths = paths;
+
+    paths.sort();
+    paths.dedup();
+
+    for path in &paths {
+        add_recursive(&mut index, path)?;
+    }
+
+    index.store()?;
+
+    Ok(())
+}
+
+pub fn add_recursive(index: &mut Index, path: &str) -> Result<()> {
     let root = get_repository_root()?;
     let absolute_path = normalize_path(&env::current_dir()?.join(path));
     let relative_path = absolute_path.strip_prefix(&root)?;
-    let mut index = Index::load()?;
+
+    // TODO: cache within a repository global state
     let ignored = get_ignored();
 
     if !absolute_path.exists() {
@@ -32,7 +48,6 @@ pub fn add(path: &str) -> Result<()> {
         for path in to_remove {
             index.remove(&path)?;
         }
-        index.store()?;
         return Ok(());
     }
 
@@ -44,10 +59,12 @@ pub fn add(path: &str) -> Result<()> {
         }
 
         let blob = Object::Blob(Blob {
-            content: general_purpose::STANDARD.encode(fs::read(&absolute_path)?),
+            content: fs::read(&absolute_path)?,
         });
 
         let hash = blob.store()?;
+        
+        // TODO: add only if needed
         index.add(
             relative_path,
             IndexEntry {
@@ -56,7 +73,6 @@ pub fn add(path: &str) -> Result<()> {
                 mtime: get_mtime(&absolute_path)?,
             },
         )?;
-        index.store()?;
     } else if absolute_path.is_dir() {
         let to_remove = index
             .entries
@@ -67,7 +83,6 @@ pub fn add(path: &str) -> Result<()> {
         for path in to_remove {
             index.remove(&path)?;
         }
-        index.store()?;
 
         for entry in absolute_path.read_dir()?.flatten() {
             let entry_path = entry.path();
@@ -80,7 +95,7 @@ pub fn add(path: &str) -> Result<()> {
             {
                 continue;
             }
-            add(entry.path().to_str().ok_or(anyhow!("Invalid path"))?)?;
+            add_recursive(index, entry.path().to_str().ok_or(anyhow!("Invalid path"))?)?;
         }
     } else {
         return Err(anyhow!("Invalid path: '{}'", relative_path.display()));
