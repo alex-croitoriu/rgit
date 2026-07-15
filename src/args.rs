@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
 
+use crate::commands::*;
+
 #[derive(Parser)]
 #[command(name = "rgit")]
 #[clap(disable_help_flag = true)]
@@ -15,26 +17,25 @@ pub enum Commands {
     /// Show the working tree status
     Status,
     /// Add file contents to the index
-    Add {
-        #[arg(required = true)]
-        paths: Vec<String>,
-    },
+    Add(add::Args),
     /// Record changes to the repository
-    Commit { message: String },
+    Commit(commit::Args),
+    /// Show commit history
+    Log,
     /// Show changes between the index and the last commit or between the index and a branch
-    Diff { target: Option<String> },
+    Diff(diff::Args),
     /// Switch to another branch
-    Checkout { target: String },
+    Checkout(checkout::Args),
     /// List, create or delete branches
     #[command(subcommand)]
     Branch(BranchSubcommands),
     /// Merge another branch into the current one
-    Merge { target: String },
+    Merge(merge::Args),
 }
 
 #[derive(Subcommand)]
 pub enum BranchSubcommands {
     List,
-    Create { name: String },
-    Delete { name: String },
+    Create(branch::create::Args),
+    Delete(branch::delete::Args),
 }

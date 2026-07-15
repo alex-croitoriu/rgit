@@ -8,13 +8,13 @@ use std::{
 use anyhow::{Result, anyhow};
 
 use crate::{
+    commands::FileDiff,
     state::{Index, IndexEntry, Object, Tree, TreeEntry},
     utils::normalize_path,
 };
 
 pub struct Repository {
     pub root: PathBuf,
-    pub ignored: Vec<PathBuf>,
 }
 
 impl Repository {
@@ -40,7 +40,21 @@ impl Repository {
         for line in reader.lines().map_while(Result::ok) {
             ignored.push(PathBuf::from(line));
         }
-        Ok(Repository { root, ignored })
+
+        Ok(Repository { root })
+    }
+
+    pub fn ignored(&self) -> Vec<PathBuf> {
+        let mut ignored = Vec::new();
+        if let Ok(file) = File::open(self.root.join(".rgitignore")) {
+            let reader = BufReader::new(file);
+
+            for line in reader.lines().map_while(Result::ok) {
+                ignored.push(PathBuf::from(line));
+            }
+        }
+
+        ignored
     }
 
     // TODO: change to head_name for future commit checkout
@@ -257,5 +271,39 @@ impl Repository {
         } else {
             Err(anyhow!("Error at stack"))
         }
+    }
+
+    pub fn staged_changes(&self) -> Result<FileDiff> {
+        let mut diff = FileDiff {
+            added: Vec::new(),
+            deleted: Vec::new(),
+            modified: Vec::new(),
+        };
+
+        let current_index = self.load_index()?;
+        let head_path = self.current_branch_path()?;
+        let head_index = if let Ok(head_hash) = fs::read_to_string(head_path) {
+            self.load_index_from_commit(&head_hash)?
+        } else {
+            Index::new()
+        };
+
+        for (name, index_entry) in &current_index.entries {
+            if let Some(head_entry) = head_index.entries.get(name) {
+                if index_entry.hash != head_entry.hash {
+                    diff.modified.push(name.clone());
+                }
+            } else {
+                diff.added.push(name.clone());
+            }
+        }
+
+        for (name, _) in head_index.entries {
+            if !current_index.entries.contains_key(&name) {
+                diff.deleted.push(name);
+            }
+        }
+
+        Ok(diff)
     }
 }

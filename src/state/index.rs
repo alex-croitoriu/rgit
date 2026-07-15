@@ -24,8 +24,8 @@ impl Index {
         }
     }
 
-    pub fn add(&mut self, name: &Path, entry: IndexEntry) {
-        self.entries.insert(name.to_path_buf(), entry);
+    pub fn add(&mut self, name: &Path, entry: IndexEntry) -> Option<IndexEntry> {
+        self.entries.insert(name.to_path_buf(), entry)
     }
 
     pub fn remove(&mut self, path: &Path) -> Result<()> {

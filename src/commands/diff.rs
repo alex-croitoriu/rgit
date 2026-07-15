@@ -4,18 +4,46 @@ use anyhow::{Result, anyhow};
 use similar::ChangeTag;
 
 use crate::{
-    commands::{Command, CommandOutput, TextDiff, TextDiffEntry},
+    commands::{self, TextDiff, TextDiffEntry},
     state::{Index, Repository},
 };
 
-pub struct DiffCommand {
-    pub target: Option<String>,
+pub struct Command;
+
+#[derive(clap::Args)]
+pub struct Args {
+    target: Option<String>,
 }
 
-impl Command for DiffCommand {
-    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
-        let mut output = String::new();
-        if let Some(target) = &self.target {
+pub struct Output {
+    diff: TextDiff,
+}
+
+impl std::fmt::Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for entry in &self.diff.added {
+            writeln!(f, "{:<11}{}", "Added:", entry.path.display())?;
+            writeln!(f, "{}", entry.change)?;
+        }
+        for entry in &self.diff.deleted {
+            writeln!(f, "{:<11}{}", "Deleted:", entry.path.display())?;
+            writeln!(f, "{}", entry.change)?;
+        }
+        for entry in &self.diff.modified {
+            writeln!(f, "{:<11}{}", "Modified:", entry.path.display())?;
+            writeln!(f, "{}", entry.change)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl commands::Command for Command {
+    type Args = Args;
+    type Output = Output;
+
+    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
+        if let Some(target) = &args.target {
             let branch_path = repository.branch_path(target);
             if !branch_path.exists() {
                 return Err(anyhow!("Branch does not exist: '{target}'"));
@@ -29,21 +57,10 @@ impl Command for DiffCommand {
             let head_index = repository.load_index_from_commit(&head_hash)?;
 
             let diff = diff_indexes(repository, &head_index, &branch_index)?;
-            for entry in diff.added {
-                output.push_str(&format!("{:<11}{}\n", "Added:", entry.path.display()));
-                output.push_str(&entry.change);
-            }
-            for entry in diff.deleted {
-                output.push_str(&format!("{:<11}{}\n", "Deleted:", entry.path.display()));
-                output.push_str(&entry.change);
-            }
-            for entry in diff.modified {
-                output.push_str(&format!("{:<11}{}\n", "Modified:", entry.path.display()));
-                output.push_str(&entry.change);
-            }
+
+            Ok(Output { diff })
         } else {
             let head_path = repository.current_branch_path()?;
-
             let head_index = if let Ok(head_hash) = fs::read_to_string(head_path) {
                 repository.load_index_from_commit(&head_hash)?
             } else {
@@ -53,21 +70,9 @@ impl Command for DiffCommand {
             let current_index = repository.load_index()?;
 
             let diff = diff_indexes(repository, &head_index, &current_index)?;
-            for entry in diff.added {
-                output.push_str(&format!("{:<11}{}\n", "Added:", entry.path.display()));
-                output.push_str(&entry.change);
-            }
-            for entry in diff.deleted {
-                output.push_str(&format!("{:<11}{}\n", "Deleted:", entry.path.display()));
-                output.push_str(&entry.change);
-            }
-            for entry in diff.modified {
-                output.push_str(&format!("{:<11}{}\n", "Modified:", entry.path.display()));
-                output.push_str(&entry.change);
-            }
-        }
 
-        Ok(CommandOutput::TextDiff(output))
+            Ok(Output { diff })
+        }
     }
 }
 

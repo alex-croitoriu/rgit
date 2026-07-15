@@ -1,60 +1,80 @@
 use anyhow::Result;
 
 use crate::{
-    commands::{Command, CommandOutput},
+    commands::{self, FileDiff},
     state::Repository,
-    utils::{get_staged_changes, get_unstaged_changes},
+    utils::{get_unstaged_changes},
 };
 
-pub struct StatusCommand {}
+pub struct Command;
 
-impl Command for StatusCommand {
-    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
-        let mut status = String::new();
-        let staged = get_staged_changes(repository)?;
+// TODO: refactor for detached head
+pub struct Output {
+     branch: String,
+     staged: FileDiff,
+     unstaged: FileDiff,
+}
+
+impl std::fmt::Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "On branch {}", self.branch)?;
+
+        if !self.staged.is_empty() {
+            write!(f, "\n\nStaged changes:")?;
+
+            for change in &self.staged.added {
+                if let Some(change) = change.to_str() {
+                    write!(f, "\n{:<11}{change}", "Added:")?;
+                }
+            }
+            for change in &self.staged.deleted {
+                if let Some(change) = change.to_str() {
+                    write!(f, "\n{:<11}{change}", "Deleted:")?;
+                }
+            }
+            for change in &self.staged.modified {
+                if let Some(change) = change.to_str() {
+                    write!(f, "\n{:<11}{change}", "Modified:")?;
+                }
+            }
+        }
+
+        if !self.unstaged.is_empty() {
+            write!(f, "\n\nUnstaged changes:")?;
+
+            for change in &self.unstaged.added {
+                if let Some(change) = change.to_str() {
+                    write!(f, "\n{:<11}{change}", "Added:")?;
+                }
+            }
+            for change in &self.unstaged.deleted {
+                if let Some(change) = change.to_str() {
+                    write!(f, "\n{:<11}{change}", "Deleted:")?;
+                }
+            }
+            for change in &self.unstaged.modified {
+                if let Some(change) = change.to_str() {
+                    write!(f, "\n{:<11}{change}", "Modified:")?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl commands::Command for Command {
+    type Args = ();
+    type Output = Output;
+
+    fn execute(repository: &Repository, _: Self::Args) -> Result<Self::Output> {
+        let head = repository.current_branch_name()?;
+        let staged = repository.staged_changes()?;
         let unstaged = get_unstaged_changes(repository)?;
 
-        let current_branch_name = repository.current_branch_name()?;
-        status.push_str(format!("On branch {current_branch_name}").as_str());
-
-        if !(staged.0.is_empty() && staged.1.is_empty() && staged.2.is_empty()) {
-            status.push_str("\n\nStaged changes:");
-        }
-        for change in staged.0 {
-            if let Some(change) = change.to_str() {
-                status.push_str(format!("\n{:<11}{change}", "Added:").as_str());
-            }
-        }
-        for change in staged.1 {
-            if let Some(change) = change.to_str() {
-                status.push_str(format!("\n{:<11}{change}", "Deleted:").as_str());
-            }
-        }
-        for change in staged.2 {
-            if let Some(change) = change.to_str() {
-                status.push_str(format!("\n{:<11}{change}", "Modified:").as_str());
-            }
-        }
-
-        if !(unstaged.0.is_empty() && unstaged.1.is_empty() && unstaged.2.is_empty()) {
-            status.push_str("\n\nUnstaged changes:");
-        }
-        for change in unstaged.0 {
-            if let Some(change) = change.to_str() {
-                status.push_str(format!("\n{:<11}{change}", "Added:").as_str());
-            }
-        }
-        for change in unstaged.1 {
-            if let Some(change) = change.to_str() {
-                status.push_str(format!("\n{:<11}{change}", "Deleted:").as_str());
-            }
-        }
-        for change in unstaged.2 {
-            if let Some(change) = change.to_str() {
-                status.push_str(format!("\n{:<11}{change}", "Modified:").as_str());
-            }
-        }
-
-        Ok(CommandOutput::FileDiff(status))
+        Ok(Output {
+            branch: head,
+            staged,
+            unstaged,
+        })
     }
 }

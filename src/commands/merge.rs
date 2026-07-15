@@ -5,50 +5,60 @@ use std::time::SystemTime;
 
 use anyhow::{Result, anyhow};
 
-use crate::commands::{Command, CommandOutput};
+use crate::commands;
 use crate::{
     state::{Commit, Index, Object, Repository},
-    utils::{get_staged_changes, get_unstaged_changes, update_working_tree},
+    utils::{get_unstaged_changes, update_working_tree},
 };
 
-pub struct MergeCommand {
-    pub target: String,
+pub struct Command;
+
+#[derive(clap::Args)]
+pub struct Args {
+    target: String,
 }
 
-impl Command for MergeCommand {
-    // TODO: refactor this garbage
-    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
-        let staged_changes = get_staged_changes(repository)?;
+pub struct Output {
+    hash: String,
+}
+
+impl std::fmt::Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Commit: {}", self.hash)?;
+        Ok(())
+    }
+}
+
+impl commands::Command for Command {
+    type Args = Args;
+    type Output = Output;
+
+    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
+        let staged_changes = repository.staged_changes()?;
         let unstaged_changes = get_unstaged_changes(repository)?;
 
-        if !(staged_changes.0.is_empty()
-            && staged_changes.1.is_empty()
-            && staged_changes.2.is_empty()
-            && unstaged_changes.0.is_empty()
-            && unstaged_changes.1.is_empty()
-            && unstaged_changes.2.is_empty())
-        {
+        if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to merge: uncommited changes"));
         }
 
         let current_branch_path = repository.current_branch_path()?;
         let current_hash = fs::read_to_string(&current_branch_path)?;
-        let target_path = repository.branch_path(&self.target);
+        let target_path = repository.branch_path(&args.target);
 
         if !target_path.exists() {
-            return Err(anyhow!("Branch does not exist: '{}'", self.target));
+            return Err(anyhow!("Branch does not exist: '{}'", args.target));
         }
         let target_hash = fs::read_to_string(&target_path)?;
 
         if is_ancestor(repository, &current_hash, &target_hash)? {
             fs::write(&current_branch_path, &target_hash)?;
 
-            let target_index = repository.load_index_from_commit(&target_hash)?;
+            let mut target_index = repository.load_index_from_commit(&target_hash)?;
             let current_index = repository.load_index()?;
-            update_working_tree(repository, &mut target_index.clone(), &current_index)?;
+            update_working_tree(repository, &mut target_index, &current_index)?;
             repository.store_index(&target_index)?;
 
-            return Ok(CommandOutput::Hash(target_hash));
+            return Ok(Output { hash: target_hash });
         }
 
         let base_hash = find_common_ancestor(repository, &current_hash, &target_hash)?;
@@ -85,7 +95,7 @@ impl Command for MergeCommand {
 
         let commit = Commit {
             tree_hash,
-            message: format!("Merge branch '{}'", self.target),
+            message: format!("Merge branch '{}'", args.target),
             timestamp: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)?
                 .as_secs(),
@@ -98,7 +108,7 @@ impl Command for MergeCommand {
         update_working_tree(repository, &mut merged_index, &head_index)?;
         repository.store_index(&merged_index)?;
 
-        Ok(CommandOutput::Hash(commit_hash))
+        Ok(Output { hash: commit_hash })
     }
 }
 

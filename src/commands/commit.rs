@@ -4,16 +4,32 @@ use std::time::SystemTime;
 use anyhow::Result;
 
 use crate::{
-    commands::{Command, CommandOutput},
+    commands,
     state::{Commit, Object, Repository},
 };
 
-pub struct CommitCommand {
-    pub message: String,
+pub struct Command;
+
+#[derive(clap::Args)]
+pub struct Args {
+    message: String,
 }
 
-impl Command for CommitCommand {
-    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput> {
+pub struct Output {
+    hash: String,
+}
+
+impl std::fmt::Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Commit: {}", self.hash)?;
+        Ok(())
+    }
+}
+
+impl commands::Command for Command {
+    type Args = Args;
+    type Output = Output;
+    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
         let index = repository.load_index()?;
 
         let tree_hash = repository.store_index_tree(&index)?;
@@ -33,7 +49,7 @@ impl Command for CommitCommand {
         }
 
         let commit = Object::Commit(Commit {
-            message: self.message.clone(),
+            message: args.message,
             parent_hashes,
             tree_hash,
             timestamp: SystemTime::now()
@@ -45,6 +61,6 @@ impl Command for CommitCommand {
 
         fs::write(repository.current_branch_path()?, &commit_hash)?;
 
-        Ok(CommandOutput::Hash(commit_hash))
+        Ok(Output { hash: commit_hash })
     }
 }

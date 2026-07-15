@@ -1,20 +1,11 @@
-mod add;
-mod branch;
-mod checkout;
-mod commit;
-mod diff;
-mod init;
-mod merge;
-mod status;
-
-pub use add::AddCommand;
-pub use branch::{BranchCreateCommand, BranchDeleteCommand, BranchListCommand};
-pub use checkout::CheckoutCommand;
-pub use commit::CommitCommand;
-pub use diff::DiffCommand;
-pub use init::InitCommand;
-pub use merge::MergeCommand;
-pub use status::StatusCommand;
+pub mod add;
+pub mod branch;
+pub mod checkout;
+pub mod commit;
+pub mod diff;
+pub mod init;
+pub mod merge;
+pub mod status;
 
 use std::path::PathBuf;
 
@@ -23,9 +14,15 @@ use anyhow::Result;
 use crate::state::Repository;
 
 pub struct FileDiff {
-    added: Vec<PathBuf>,
-    deleted: Vec<PathBuf>,
-    modified: Vec<PathBuf>,
+    pub added: Vec<PathBuf>,
+    pub deleted: Vec<PathBuf>,
+    pub modified: Vec<PathBuf>,
+}
+
+impl FileDiff {
+    fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
+    }
 }
 
 pub struct TextDiffEntry {
@@ -38,19 +35,17 @@ pub struct TextDiff {
     deleted: Vec<TextDiffEntry>,
     modified: Vec<TextDiffEntry>,
 }
-#[derive(Debug)]
-pub enum CommandOutput {
-    Empty,
-    List(Vec<String>),
-    TextDiff(String),
-    FileDiff(String),
-    Hash(String),
-    Path(PathBuf),
-}
+
 pub trait Command {
-    fn execute(&mut self, repository: &Repository) -> Result<CommandOutput>;
+    type Args;
+    type Output;
+
+    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output>;
 }
 
 pub trait StatelessCommand {
-    fn execute(&mut self) -> Result<CommandOutput>;
+    type Args;
+    type Output;
+
+    fn execute(input: Self::Args) -> Result<Self::Output>;
 }
