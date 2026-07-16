@@ -52,23 +52,23 @@ impl commands::Command for Command {
             let branch_hash = fs::read_to_string(branch_path)?;
             let branch_index = repository.load_index_from_commit(&branch_hash)?;
 
-            let head_path = repository.current_branch_path()?;
-            let head_hash = fs::read_to_string(head_path)?;
-            let head_index = repository.load_index_from_commit(&head_hash)?;
+            let head_index = if let Some(hash) = repository.head_hash()? {
+                repository.load_index_from_commit(&hash)?
+            } else {
+                Index::new()
+            };
 
             let diff = diff_indexes(repository, &head_index, &branch_index)?;
 
             Ok(Output { diff })
         } else {
-            let head_path = repository.current_branch_path()?;
-            let head_index = if let Ok(head_hash) = fs::read_to_string(head_path) {
-                repository.load_index_from_commit(&head_hash)?
+            let head_index = if let Some(hash) = repository.head_hash()? {
+                repository.load_index_from_commit(&hash)?
             } else {
                 Index::new()
             };
 
             let current_index = repository.load_index()?;
-
             let diff = diff_indexes(repository, &head_index, &current_index)?;
 
             Ok(Output { diff })

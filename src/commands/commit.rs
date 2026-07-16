@@ -34,7 +34,7 @@ impl commands::Command for Command {
 
         let tree_hash = repository.store_index_tree(&index)?;
 
-        let merge_head_path = repository.merge_head_path();
+        let merge_head_path = repository.merge_head_file_path();
         let mut parent_hashes = if let Ok(path) = repository.current_branch_path()
             && path.exists()
         {

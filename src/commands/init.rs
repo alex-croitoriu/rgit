@@ -24,7 +24,7 @@ impl commands::StatelessCommand for Command {
     type Args = ();
     type Output = Output;
 
-    fn execute(_: Self::Args) -> Result<Self::Output> {
+    fn execute((): ()) -> Result<Self::Output> {
         let current_dir = env::current_dir()?;
         if Repository::is_valid_root(&current_dir) {
             return Err(anyhow!(

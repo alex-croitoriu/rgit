@@ -35,10 +35,11 @@ impl commands::Command for Command {
             ));
         }
 
-        let head = repository.current_branch_path()?;
-        let commit_hash = fs::read_to_string(head)
-            .map_err(|_| anyhow!("Branch not created: no commits on HEAD yet"))?;
-        fs::write(branch_path, commit_hash)?;
+        if let Some(hash) = repository.head_hash()? {
+            fs::write(branch_path, hash)?;
+        } else {
+            return Err(anyhow!("Branch not created: no commits on HEAD yet"));
+        }
 
         Ok(Output { name: args.name })
     }

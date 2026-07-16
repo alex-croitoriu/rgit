@@ -2,17 +2,20 @@ use std::fs;
 
 use anyhow::{Result, anyhow};
 
-use crate::{commands, state::Repository};
+use crate::{
+    commands,
+    state::{Head, Repository},
+};
 
 pub struct Command;
 
 #[derive(clap::Args)]
 pub struct Args {
-     name: String,
+    name: String,
 }
 
 pub struct Output {
-     name: String,
+    name: String,
 }
 
 impl std::fmt::Display for Output {
@@ -35,8 +38,9 @@ impl commands::Command for Command {
             ));
         }
 
-        let head = repository.current_branch_path()?;
-        if head == branch_path {
+        if let Head::Branch { name } = repository.head()?
+            && name == args.name
+        {
             return Err(anyhow!(
                 "Branch not deleted: '{}' is the current branch",
                 args.name

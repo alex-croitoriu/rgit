@@ -8,7 +8,7 @@ use anyhow::{Result, anyhow};
 use crate::commands;
 use crate::{
     state::{Commit, Index, Object, Repository},
-    utils::{get_unstaged_changes, update_working_tree},
+    utils::{unstaged_changes, update_working_tree},
 };
 
 pub struct Command;
@@ -35,7 +35,7 @@ impl commands::Command for Command {
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
         let staged_changes = repository.staged_changes()?;
-        let unstaged_changes = get_unstaged_changes(repository)?;
+        let unstaged_changes = unstaged_changes(repository)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to merge: uncommited changes"));
@@ -71,7 +71,7 @@ impl commands::Command for Command {
             three_way_merge(&base_index, &head_index, &target_index);
 
         if !conflicts.is_empty() {
-            fs::write(repository.merge_head_path(), &target_hash)?;
+            fs::write(repository.merge_head_file_path(), &target_hash)?;
 
             update_working_tree(repository, &mut merged_index, &head_index)?;
             repository.store_index(&merged_index)?;

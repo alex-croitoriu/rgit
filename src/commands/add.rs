@@ -9,6 +9,7 @@ use crate::{
     state::{Blob, Index, IndexEntry, Object, Repository},
     utils::{modification_time, normalize_path},
 };
+
 pub struct Command;
 
 #[derive(clap::Args)]

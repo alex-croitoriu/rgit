@@ -2,22 +2,24 @@ use anyhow::Result;
 
 use crate::{
     commands::{self, FileDiff},
-    state::Repository,
-    utils::{get_unstaged_changes},
+    state::{Head, Repository},
+    utils::unstaged_changes,
 };
 
 pub struct Command;
 
-// TODO: refactor for detached head
 pub struct Output {
-     branch: String,
-     staged: FileDiff,
-     unstaged: FileDiff,
+    head: Head,
+    staged: FileDiff,
+    unstaged: FileDiff,
 }
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "On branch {}", self.branch)?;
+        match &self.head {
+            Head::Branch { name } => write!(f, "On branch: {name}")?,
+            Head::Commit { hash } => write!(f, "Detached HEAD: {hash}")?,
+        }
 
         if !self.staged.is_empty() {
             write!(f, "\n\nStaged changes:")?;
@@ -66,13 +68,13 @@ impl commands::Command for Command {
     type Args = ();
     type Output = Output;
 
-    fn execute(repository: &Repository, _: Self::Args) -> Result<Self::Output> {
-        let head = repository.current_branch_name()?;
+    fn execute(repository: &Repository, (): ()) -> Result<Self::Output> {
+        let head = repository.head()?;
         let staged = repository.staged_changes()?;
-        let unstaged = get_unstaged_changes(repository)?;
+        let unstaged = unstaged_changes(repository)?;
 
         Ok(Output {
-            branch: head,
+            head,
             staged,
             unstaged,
         })

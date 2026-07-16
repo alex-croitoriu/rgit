@@ -17,6 +17,12 @@ pub struct Repository {
     pub root: PathBuf,
 }
 
+#[derive(Debug)]
+pub enum Head {
+    Branch { name: String },
+    Commit { hash: String },
+}
+
 impl Repository {
     pub fn is_valid_root(path: &Path) -> bool {
         path.join(".rgit/objects").is_dir()
@@ -31,14 +37,6 @@ impl Repository {
             if !root.pop() {
                 return Err(anyhow!("Repository not found"));
             }
-        }
-
-        let mut ignored = Vec::new();
-        let file = File::open(root.join(".rgitignore"))?;
-        let reader = BufReader::new(file);
-
-        for line in reader.lines().map_while(Result::ok) {
-            ignored.push(PathBuf::from(line));
         }
 
         Ok(Repository { root })
@@ -57,23 +55,48 @@ impl Repository {
         ignored
     }
 
-    // TODO: change to head_name for future commit checkout
-    pub fn current_branch_name(&self) -> Result<String> {
-        if let Some(head) = fs::read_to_string(self.head_path())?.strip_prefix("ref: ") {
-            let current_branch = PathBuf::from(head)
+    pub fn head(&self) -> Result<Head> {
+        let content = fs::read_to_string(self.head_file_path())?;
+
+        if let Some(head) = content.strip_prefix("ref: ") {
+            let branch = PathBuf::from(head)
                 .file_name()
                 .ok_or(anyhow!("Current branch not found"))?
                 .to_string_lossy()
                 .to_string();
-            Ok(current_branch)
+            Ok(Head::Branch { name: branch })
+        } else if let Ok(Object::Commit(_)) = self.load_object(&content) {
+            Ok(Head::Commit { hash: content })
         } else {
             Err(anyhow!("Corrupt HEAD file"))
         }
     }
 
-    // TODO: change to head_path for future commit checkout
+    // TODO: check correctness
+    pub fn head_hash(&self) -> Result<Option<String>> {
+        let content = fs::read_to_string(self.head_file_path())?;
+
+        if let Some(head) = content.strip_prefix("ref: ") {
+            let path = normalize_path(&self.root.join(".rgit").join(head));
+            if path.exists() {
+                let hash = fs::read_to_string(path)?;
+                Ok(Some(hash))
+            } else if let Some(file) = path.file_name()
+                && file.to_string_lossy() == "master"
+            {
+                Ok(None)
+            } else {
+                Err(anyhow!("Corrupt HEAD file"))
+            }
+        } else if let Ok(Object::Commit(_)) = self.load_object(&content) {
+            Ok(Some(content))
+        } else {
+            Err(anyhow!("Corrupt HEAD file"))
+        }
+    }
+
     pub fn current_branch_path(&self) -> Result<PathBuf> {
-        if let Some(head) = fs::read_to_string(self.head_path())?.strip_prefix("ref: ") {
+        if let Some(head) = fs::read_to_string(self.head_file_path())?.strip_prefix("ref: ") {
             let path = normalize_path(&self.root.join(".rgit").join(head));
             Ok(path)
         } else {
@@ -81,27 +104,40 @@ impl Repository {
         }
     }
 
-    pub fn branch_path(&self, name: &str) -> PathBuf {
-        normalize_path(&self.heads_path().join(name))
+    pub fn change_head(&self, target: &Head) -> Result<()> {
+        match target {
+            Head::Branch { name } => {
+                fs::write(self.head_file_path(), format!("ref: refs/heads/{name}"))?;
+            }
+            Head::Commit { hash } => {
+                fs::write(self.head_file_path(), hash)?;
+            }
+        }
+
+        Ok(())
     }
 
-    pub fn objects_path(&self) -> PathBuf {
+    pub fn branch_path(&self, name: &str) -> PathBuf {
+        normalize_path(&self.heads_dir_path().join(name))
+    }
+
+    pub fn objects_dir_path(&self) -> PathBuf {
         self.root.join(".rgit/objects")
     }
 
-    pub fn index_path(&self) -> PathBuf {
+    pub fn index_file_path(&self) -> PathBuf {
         self.root.join(".rgit/index")
     }
 
-    pub fn head_path(&self) -> PathBuf {
+    pub fn head_file_path(&self) -> PathBuf {
         self.root.join(".rgit/HEAD")
     }
 
-    pub fn merge_head_path(&self) -> PathBuf {
+    pub fn merge_head_file_path(&self) -> PathBuf {
         self.root.join(".rgit/MERGE_HEAD")
     }
 
-    pub fn heads_path(&self) -> PathBuf {
+    pub fn heads_dir_path(&self) -> PathBuf {
         self.root.join(".rgit/refs/heads")
     }
 
@@ -111,7 +147,7 @@ impl Repository {
 
         let compressed = Object::compress(&object.serialize()?)?;
 
-        let dir_path = self.objects_path().join(dir_name);
+        let dir_path = self.objects_dir_path().join(dir_name);
         let file_path = dir_path.join(file_name);
         fs::create_dir_all(dir_path)?;
 
@@ -124,7 +160,7 @@ impl Repository {
 
     pub fn load_object(&self, hash: &str) -> Result<Object> {
         let (dir, file) = hash.split_at(2);
-        let path = self.objects_path().join(dir).join(file);
+        let path = self.objects_dir_path().join(dir).join(file);
 
         let compressed = fs::read(path)?;
 
@@ -148,7 +184,7 @@ impl Repository {
     }
 
     pub fn load_index(&self) -> Result<Index> {
-        let file = OpenOptions::new().read(true).open(self.index_path())?;
+        let file = OpenOptions::new().read(true).open(self.index_file_path())?;
         let reader = BufReader::new(file);
         let index = serde_json::from_reader(reader).unwrap_or(Index::new());
 
@@ -159,7 +195,7 @@ impl Repository {
         let file = OpenOptions::new()
             .write(true)
             .truncate(true)
-            .open(self.index_path())?;
+            .open(self.index_file_path())?;
         let mut writer = BufWriter::new(file);
         serde_json::to_writer_pretty(&mut writer, &index)?;
 
@@ -193,9 +229,11 @@ impl Repository {
                     }
                 }
             }
-        }
 
-        Ok(index)
+            Ok(index)
+        } else {
+            Err(anyhow!("Object is not a commit: {hash}"))
+        }
     }
 
     pub fn store_index_tree(&self, index: &Index) -> Result<String> {
@@ -281,8 +319,7 @@ impl Repository {
         };
 
         let current_index = self.load_index()?;
-        let head_path = self.current_branch_path()?;
-        let head_index = if let Ok(head_hash) = fs::read_to_string(head_path) {
+        let head_index = if let Some(head_hash) = self.head_hash()? {
             self.load_index_from_commit(&head_hash)?
         } else {
             Index::new()

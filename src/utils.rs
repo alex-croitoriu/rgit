@@ -29,7 +29,7 @@ pub fn modification_time(path: &Path) -> Result<u64> {
         .as_secs())
 }
 
-pub fn get_unstaged_changes(repository: &Repository) -> Result<FileDiff> {
+pub fn unstaged_changes(repository: &Repository) -> Result<FileDiff> {
     let mut diff = FileDiff {
         added: Vec::new(),
         deleted: Vec::new(),
