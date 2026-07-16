@@ -1,3 +1,9 @@
+use std::path::PathBuf;
+
+use anyhow::Result;
+
+use crate::state::Repository;
+
 pub mod add;
 pub mod branch;
 pub mod checkout;
@@ -7,12 +13,7 @@ pub mod init;
 pub mod merge;
 pub mod status;
 
-use std::path::PathBuf;
-
-use anyhow::Result;
-
-use crate::state::Repository;
-
+// TODO: change where these leve
 pub struct FileDiff {
     pub added: Vec<PathBuf>,
     pub deleted: Vec<PathBuf>,

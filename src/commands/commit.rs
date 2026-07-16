@@ -1,5 +1,4 @@
-use std::fs;
-use std::time::SystemTime;
+use std::{fs, time::SystemTime};
 
 use anyhow::Result;
 

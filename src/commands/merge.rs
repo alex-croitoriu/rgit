@@ -1,12 +1,14 @@
-use std::collections::{HashSet, VecDeque};
-use std::fs;
-use std::path::PathBuf;
-use std::time::SystemTime;
+use std::{
+    collections::{HashSet, VecDeque},
+    fs,
+    path::PathBuf,
+    time::SystemTime,
+};
 
 use anyhow::{Result, anyhow};
 
-use crate::commands;
 use crate::{
+    commands,
     state::{Commit, Index, Object, Repository},
     utils::{unstaged_changes, update_working_tree},
 };

@@ -9,7 +9,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands::FileDiff,
-    state::{Index, IndexEntry, Object, Tree, TreeEntry},
+    state::{Index, IndexEntry, Object, Tree, TreeEntry, TreeEntryType},
     utils::normalize_path,
 };
 
@@ -72,7 +72,6 @@ impl Repository {
         }
     }
 
-    // TODO: check correctness
     pub fn head_hash(&self) -> Result<Option<String>> {
         let content = fs::read_to_string(self.head_file_path())?;
 
@@ -95,16 +94,7 @@ impl Repository {
         }
     }
 
-    pub fn current_branch_path(&self) -> Result<PathBuf> {
-        if let Some(head) = fs::read_to_string(self.head_file_path())?.strip_prefix("ref: ") {
-            let path = normalize_path(&self.root.join(".rgit").join(head));
-            Ok(path)
-        } else {
-            Err(anyhow!("Corrupt HEAD file"))
-        }
-    }
-
-    pub fn change_head(&self, target: &Head) -> Result<()> {
+    pub fn update_head(&self, target: &Head) -> Result<()> {
         match target {
             Head::Branch { name } => {
                 fs::write(self.head_file_path(), format!("ref: refs/heads/{name}"))?;
@@ -121,12 +111,13 @@ impl Repository {
         normalize_path(&self.heads_dir_path().join(name))
     }
 
-    pub fn objects_dir_path(&self) -> PathBuf {
-        self.root.join(".rgit/objects")
-    }
-
-    pub fn index_file_path(&self) -> PathBuf {
-        self.root.join(".rgit/index")
+    pub fn current_branch_path(&self) -> Result<PathBuf> {
+        if let Some(head) = fs::read_to_string(self.head_file_path())?.strip_prefix("ref: ") {
+            let path = normalize_path(&self.root.join(".rgit").join(head));
+            Ok(path)
+        } else {
+            Err(anyhow!("Corrupt HEAD file"))
+        }
     }
 
     pub fn head_file_path(&self) -> PathBuf {
@@ -137,21 +128,28 @@ impl Repository {
         self.root.join(".rgit/MERGE_HEAD")
     }
 
+    pub fn index_file_path(&self) -> PathBuf {
+        self.root.join(".rgit/index")
+    }
+
     pub fn heads_dir_path(&self) -> PathBuf {
         self.root.join(".rgit/refs/heads")
+    }
+
+    pub fn objects_dir_path(&self) -> PathBuf {
+        self.root.join(".rgit/objects")
     }
 
     pub fn store_object(&self, object: &Object) -> Result<String> {
         let hash = object.hash()?;
         let (dir_name, file_name) = hash.split_at(2);
 
-        let compressed = Object::compress(&object.serialize()?)?;
-
         let dir_path = self.objects_dir_path().join(dir_name);
         let file_path = dir_path.join(file_name);
-        fs::create_dir_all(dir_path)?;
 
         if !file_path.exists() {
+            fs::create_dir_all(dir_path)?;
+            let compressed = Object::compress(&object.serialize()?)?;
             fs::write(&file_path, compressed)?;
         }
 
@@ -213,19 +211,22 @@ impl Repository {
 
             while let Some((tree, path)) = stack.pop() {
                 for entry in tree.entries {
-                    if entry.object_type == "Blob" {
-                        index.entries.insert(
-                            path.join(entry.name),
-                            IndexEntry {
-                                hash: entry.object_hash,
-                                size: 0,
-                                mtime: 0,
-                            },
-                        );
-                    } else if entry.object_type == "Tree"
-                        && let Object::Tree(subtree) = self.load_object(&entry.object_hash)?
-                    {
-                        stack.push((subtree, path.join(entry.name)));
+                    match entry.object_type {
+                        TreeEntryType::Blob => {
+                            index.entries.insert(
+                                path.join(entry.name),
+                                IndexEntry {
+                                    hash: entry.object_hash,
+                                    size: 0,
+                                    mtime: 0,
+                                },
+                            );
+                        }
+                        TreeEntryType::Tree => {
+                            if let Object::Tree(subtree) = self.load_object(&entry.object_hash)? {
+                                stack.push((subtree, path.join(entry.name)));
+                            }
+                        }
                     }
                 }
             }
@@ -267,7 +268,7 @@ impl Repository {
                     && let Some(second_to_last) = stack.last_mut()
                 {
                     second_to_last.1.entries.push(TreeEntry {
-                        object_type: String::from("Tree"),
+                        object_type: TreeEntryType::Tree,
                         object_hash: self.store_object(&Object::Tree(last.1))?,
                         name: last.0,
                     });
@@ -285,7 +286,7 @@ impl Repository {
 
             if let Some(last) = stack.last_mut() {
                 last.1.entries.push(TreeEntry {
-                    object_type: String::from("Blob"),
+                    object_type: TreeEntryType::Blob,
                     object_hash: entry.hash.clone(),
                     name: file,
                 });
@@ -297,7 +298,7 @@ impl Repository {
                 && let Some(second_to_last) = stack.last_mut()
             {
                 second_to_last.1.entries.push(TreeEntry {
-                    object_type: String::from("Tree"),
+                    object_type: TreeEntryType::Tree,
                     object_hash: self.store_object(&Object::Tree(last.1))?,
                     name: last.0,
                 });

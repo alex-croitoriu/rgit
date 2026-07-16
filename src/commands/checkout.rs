@@ -75,7 +75,7 @@ impl commands::Command for Command {
         update_working_tree(repository, &mut target_index, &current_index)?;
         repository.store_index(&target_index)?;
 
-        repository.change_head(&target_head)?;
+        repository.update_head(&target_head)?;
 
         Ok(Output { head: target_head })
     }

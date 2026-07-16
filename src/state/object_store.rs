@@ -12,9 +12,14 @@ pub struct Blob {
 }
 
 #[derive(SchemaRead, SchemaWrite, Serialize, Deserialize, Debug)]
+pub enum TreeEntryType {
+    Blob,
+    Tree,
+}
 
+#[derive(SchemaRead, SchemaWrite, Serialize, Deserialize, Debug)]
 pub struct TreeEntry {
-    pub object_type: String,
+    pub object_type: TreeEntryType,
     pub object_hash: String,
     pub name: String,
 }

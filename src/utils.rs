@@ -1,11 +1,15 @@
-use std::fs;
-use std::path::{Component, Path, PathBuf};
-use std::time::SystemTime;
+use std::{
+    fs,
+    path::{Component, Path, PathBuf},
+    time::SystemTime,
+};
 
 use anyhow::Result;
 
-use crate::commands::FileDiff;
-use crate::state::{Index, Repository};
+use crate::{
+    commands::FileDiff,
+    state::{Index, Repository},
+};
 
 pub fn normalize_path(path: &Path) -> PathBuf {
     let mut result = PathBuf::new();
