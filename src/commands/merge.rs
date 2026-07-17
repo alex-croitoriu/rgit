@@ -11,7 +11,7 @@ use crate::{
     commands,
     state::{
         Commit, Index, Object, Repository, branch_path, current_branch_path, read_blob_text,
-        unstaged_changes, update_working_tree,
+        staged_changes, unstaged_changes, update_working_tree,
     },
     utils::{merge_head_file_path, objects_dir_path},
 };
@@ -38,7 +38,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let staged_changes = repository.staged_changes()?;
+        let staged_changes = staged_changes(&repository.root)?;
         let unstaged_changes = unstaged_changes(&repository.root)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {

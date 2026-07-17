@@ -26,13 +26,11 @@ pub struct TreeEntry {
 }
 
 #[derive(SchemaRead, SchemaWrite, Debug)]
-
 pub struct Tree {
     pub entries: Vec<TreeEntry>,
 }
 
 #[derive(SchemaRead, SchemaWrite, Debug)]
-
 pub struct Commit {
     pub tree_hash: String,
     pub message: String,
@@ -41,7 +39,6 @@ pub struct Commit {
 }
 
 #[derive(SchemaRead, SchemaWrite, Debug)]
-
 pub enum Object {
     Blob(Blob),
     Tree(Tree),

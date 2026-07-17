@@ -5,8 +5,8 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Head, Index, Object, Repository, branch_path, head, unstaged_changes, update_head,
-        update_working_tree,
+        Head, Index, Object, Repository, branch_path, head, staged_changes, unstaged_changes,
+        update_head, update_working_tree,
     },
 };
 
@@ -24,11 +24,9 @@ pub struct Output {
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.head {
-            Head::Branch { name } => write!(f, "Switched to branch: {name}")?,
-            Head::Commit { hash } => write!(f, "Switched to commit: {hash}")?,
+            Head::Branch { name } => write!(f, "Switched to branch: {name}"),
+            Head::Commit { hash } => write!(f, "Switched to commit: {hash}"),
         }
-
-        Ok(())
     }
 }
 
@@ -37,7 +35,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let staged_changes = repository.staged_changes()?;
+        let staged_changes = staged_changes(&repository.root)?;
         let unstaged_changes = unstaged_changes(&repository.root)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {

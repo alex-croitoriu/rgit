@@ -2,15 +2,15 @@ use anyhow::Result;
 
 use crate::{
     commands,
-    state::{FileDiff, Head, Repository, head, unstaged_changes},
+    state::{Changes, Head, Repository, head, staged_changes, unstaged_changes},
 };
 
 pub struct Command;
 
 pub struct Output {
     head: Head,
-    staged: FileDiff,
-    unstaged: FileDiff,
+    staged: Changes,
+    unstaged: Changes,
 }
 
 impl std::fmt::Display for Output {
@@ -38,7 +38,7 @@ impl commands::Command for Command {
 
     fn execute(repository: &Repository, (): ()) -> Result<Self::Output> {
         let head = head(&repository.root)?;
-        let staged = repository.staged_changes()?;
+        let staged = staged_changes(&repository.root)?;
         let unstaged = unstaged_changes(&repository.root)?;
 
         Ok(Output {

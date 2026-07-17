@@ -1,53 +1,29 @@
-use std::path::PathBuf;
+use std::{
+    fmt::Write,
+    path::{Path, PathBuf},
+};
 
-#[derive(Default)]
-pub struct FileDiff {
-    pub added: Vec<PathBuf>,
-    pub deleted: Vec<PathBuf>,
-    pub modified: Vec<PathBuf>,
-}
+use anyhow::Result;
+use similar::ChangeTag;
 
-pub struct TextDiffEntry {
+use crate::{
+    state::{Index, read_blob_text},
+    utils::objects_dir_path,
+};
+
+pub struct DiffEntry {
     pub path: PathBuf,
     pub change: String,
 }
 
 #[derive(Default)]
-pub struct TextDiff {
-    pub added: Vec<TextDiffEntry>,
-    pub deleted: Vec<TextDiffEntry>,
-    pub modified: Vec<TextDiffEntry>,
+pub struct Diff {
+    pub added: Vec<DiffEntry>,
+    pub deleted: Vec<DiffEntry>,
+    pub modified: Vec<DiffEntry>,
 }
 
-impl FileDiff {
-    pub fn is_empty(&self) -> bool {
-        self.added.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
-    }
-}
-
-impl std::fmt::Display for FileDiff {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for change in &self.added {
-            if let Some(change) = change.to_str() {
-                write!(f, "\n{:<11}{change}", "Added:")?;
-            }
-        }
-        for change in &self.deleted {
-            if let Some(change) = change.to_str() {
-                write!(f, "\n{:<11}{change}", "Deleted:")?;
-            }
-        }
-        for change in &self.modified {
-            if let Some(change) = change.to_str() {
-                write!(f, "\n{:<11}{change}", "Modified:")?;
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for TextDiff {
+impl std::fmt::Display for Diff {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for entry in &self.added {
             writeln!(f, "{:<11}{}", "Added:", entry.path.display())?;
@@ -64,4 +40,64 @@ impl std::fmt::Display for TextDiff {
 
         Ok(())
     }
+}
+
+pub fn diff_indexes(root: &Path, from: &Index, to: &Index) -> Result<Diff> {
+    let mut diff = Diff::default();
+
+    for (name, from_entry) in &from.entries {
+        if let Some(to_entry) = to.entries.get(name) {
+            if from_entry.hash != to_entry.hash {
+                let from_content = read_blob_text(&objects_dir_path(&root), &from_entry.hash)?;
+                let to_content = read_blob_text(&objects_dir_path(&root), &to_entry.hash)?;
+                diff.modified.push(DiffEntry {
+                    path: name.clone(),
+                    change: diff_text(&from_content, &to_content)?,
+                });
+            }
+        } else if let Ok(from_content) = read_blob_text(&objects_dir_path(&root), &from_entry.hash)
+        {
+            diff.deleted.push(DiffEntry {
+                path: name.clone(),
+                change: diff_text(&from_content, "")?,
+            });
+        } else {
+            diff.deleted.push(DiffEntry {
+                path: name.clone(),
+                change: String::from("Binary file"),
+            });
+        }
+    }
+
+    for (name, to_entry) in &to.entries {
+        if !from.entries.contains_key(name) {
+            if let Ok(to_content) = read_blob_text(&objects_dir_path(&root), &to_entry.hash) {
+                diff.added.push(DiffEntry {
+                    path: name.clone(),
+                    change: diff_text("", &to_content)?,
+                });
+            } else {
+                diff.added.push(DiffEntry {
+                    path: name.clone(),
+                    change: String::from("Binary file"),
+                });
+            }
+        }
+    }
+
+    Ok(diff)
+}
+
+fn diff_text(from: &str, to: &str) -> Result<String> {
+    let diff = similar::TextDiff::from_lines(from, to);
+    let mut output = String::new();
+    for change in diff.iter_all_changes() {
+        let sign = match change.tag() {
+            ChangeTag::Delete => "- ",
+            ChangeTag::Insert => "+ ",
+            ChangeTag::Equal => "  ",
+        };
+        write!(output, "{sign}{change}")?;
+    }
+    Ok(output)
 }

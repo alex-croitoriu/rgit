@@ -4,7 +4,10 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Commit, Head, Index, Object, Repository, current_branch_path, head, head_hash},
+    state::{
+        Commit, Head, Index, Object, Repository, current_branch_path, head, head_hash,
+        staged_changes,
+    },
     utils::{merge_head_file_path, objects_dir_path},
 };
 
@@ -29,7 +32,7 @@ impl commands::Command for Command {
     type Args = Args;
     type Output = Output;
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let staged_changes = repository.staged_changes()?;
+        let staged_changes = staged_changes(&repository.root)?;
 
         if staged_changes.is_empty() {
             return Err(anyhow!("Commit not created: no changes"));

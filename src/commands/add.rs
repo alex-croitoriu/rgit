@@ -31,11 +31,13 @@ impl commands::Command for Command {
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
         let mut index = Index::load(&repository.root)?;
         let mut paths = args.paths.clone();
+        let ignored = ignored_paths(&repository.root);
+
         paths.sort_unstable();
         paths.dedup();
 
         for path in &paths {
-            add_recursive(repository, &mut index, path)?;
+            add_recursive(repository, &mut index, &ignored, path)?;
         }
 
         index.store(&repository.root)?;
@@ -44,7 +46,12 @@ impl commands::Command for Command {
     }
 }
 
-fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Result<()> {
+fn add_recursive(
+    repository: &Repository,
+    index: &mut Index,
+    ignored: &Vec<PathBuf>,
+    path: &str,
+) -> Result<()> {
     let absolute_path = normalize_path(&env::current_dir()?.join(path));
     let relative_path = absolute_path.strip_prefix(&repository.root)?;
 
@@ -66,10 +73,7 @@ fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Resu
     }
 
     if absolute_path.is_file() {
-        if ignored_paths(&repository.root)
-            .iter()
-            .any(|p| relative_path.starts_with(p))
-        {
+        if ignored.iter().any(|p| relative_path.starts_with(p)) {
             return Ok(());
         }
 
@@ -104,7 +108,7 @@ fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Resu
             if relative_entry_path == ".rgit" {
                 continue;
             }
-            if ignored_paths(&repository.root)
+            if ignored
                 .iter()
                 .any(|p| relative_entry_path.starts_with(p))
             {
@@ -113,6 +117,7 @@ fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Resu
             add_recursive(
                 repository,
                 index,
+                ignored,
                 entry.path().to_str().ok_or(anyhow!("Invalid path"))?,
             )?;
         }
