@@ -8,8 +8,7 @@ use std::{
 use anyhow::{Result, anyhow};
 
 use crate::{
-    commands::FileDiff,
-    state::{Index, IndexEntry, Object, Tree, TreeEntry, TreeEntryType},
+    state::{FileDiff, Index, IndexEntry, Object, Tree, TreeEntry, TreeEntryType},
     utils::normalize_path,
 };
 

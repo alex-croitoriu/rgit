@@ -4,8 +4,8 @@ use anyhow::{Result, anyhow};
 use similar::ChangeTag;
 
 use crate::{
-    commands::{self, TextDiff, TextDiffEntry},
-    state::{Index, Repository},
+    commands,
+    state::{Index, Repository, TextDiff, TextDiffEntry},
 };
 
 pub struct Command;
@@ -21,18 +21,7 @@ pub struct Output {
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for entry in &self.diff.added {
-            writeln!(f, "{:<11}{}", "Added:", entry.path.display())?;
-            writeln!(f, "{}", entry.change)?;
-        }
-        for entry in &self.diff.deleted {
-            writeln!(f, "{:<11}{}", "Deleted:", entry.path.display())?;
-            writeln!(f, "{}", entry.change)?;
-        }
-        for entry in &self.diff.modified {
-            writeln!(f, "{:<11}{}", "Modified:", entry.path.display())?;
-            writeln!(f, "{}", entry.change)?;
-        }
+        write!(f, "{}", self.diff)?;
 
         Ok(())
     }

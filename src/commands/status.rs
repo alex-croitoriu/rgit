@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use crate::{
-    commands::{self, FileDiff},
-    state::{Head, Repository},
+    commands,
+    state::{FileDiff, Head, Repository},
     utils::unstaged_changes,
 };
 
@@ -20,46 +20,15 @@ impl std::fmt::Display for Output {
             Head::Branch { name } => write!(f, "On branch: {name}")?,
             Head::Commit { hash } => write!(f, "Detached HEAD: {hash}")?,
         }
-
         if !self.staged.is_empty() {
             write!(f, "\n\nStaged changes:")?;
-
-            for change in &self.staged.added {
-                if let Some(change) = change.to_str() {
-                    write!(f, "\n{:<11}{change}", "Added:")?;
-                }
-            }
-            for change in &self.staged.deleted {
-                if let Some(change) = change.to_str() {
-                    write!(f, "\n{:<11}{change}", "Deleted:")?;
-                }
-            }
-            for change in &self.staged.modified {
-                if let Some(change) = change.to_str() {
-                    write!(f, "\n{:<11}{change}", "Modified:")?;
-                }
-            }
+            write!(f, "{}", self.staged)?;
         }
-
         if !self.unstaged.is_empty() {
             write!(f, "\n\nUnstaged changes:")?;
-
-            for change in &self.unstaged.added {
-                if let Some(change) = change.to_str() {
-                    write!(f, "\n{:<11}{change}", "Added:")?;
-                }
-            }
-            for change in &self.unstaged.deleted {
-                if let Some(change) = change.to_str() {
-                    write!(f, "\n{:<11}{change}", "Deleted:")?;
-                }
-            }
-            for change in &self.unstaged.modified {
-                if let Some(change) = change.to_str() {
-                    write!(f, "\n{:<11}{change}", "Modified:")?;
-                }
-            }
+            write!(f, "{}", self.unstaged)?;
         }
+
         Ok(())
     }
 }

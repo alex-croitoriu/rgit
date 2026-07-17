@@ -6,10 +6,7 @@ use std::{
 
 use anyhow::Result;
 
-use crate::{
-    commands::FileDiff,
-    state::{Index, Repository},
-};
+use crate::state::{FileDiff, Index, Repository};
 
 pub fn normalize_path(path: &Path) -> PathBuf {
     let mut result = PathBuf::new();
