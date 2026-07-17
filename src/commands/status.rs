@@ -2,8 +2,7 @@ use anyhow::Result;
 
 use crate::{
     commands,
-    state::{FileDiff, Head, Repository},
-    utils::unstaged_changes,
+    state::{FileDiff, Head, Repository, head, unstaged_changes},
 };
 
 pub struct Command;
@@ -38,9 +37,9 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, (): ()) -> Result<Self::Output> {
-        let head = repository.head()?;
+        let head = head(&repository.root)?;
         let staged = repository.staged_changes()?;
-        let unstaged = unstaged_changes(repository)?;
+        let unstaged = unstaged_changes(&repository.root)?;
 
         Ok(Output {
             head,

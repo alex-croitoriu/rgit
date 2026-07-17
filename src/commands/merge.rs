@@ -9,8 +9,11 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Commit, Index, Object, Repository},
-    utils::{unstaged_changes, update_working_tree},
+    state::{
+        Commit, Index, Object, Repository, branch_path, current_branch_path, read_blob_text,
+        unstaged_changes, update_working_tree,
+    },
+    utils::{merge_head_file_path, objects_dir_path},
 };
 
 pub struct Command;
@@ -26,8 +29,7 @@ pub struct Output {
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Commit: {}", self.hash)?;
-        Ok(())
+        write!(f, "Commit: {}", self.hash)
     }
 }
 
@@ -37,46 +39,49 @@ impl commands::Command for Command {
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
         let staged_changes = repository.staged_changes()?;
-        let unstaged_changes = unstaged_changes(repository)?;
+        let unstaged_changes = unstaged_changes(&repository.root)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to merge: uncommited changes"));
         }
 
-        let current_branch_path = repository.current_branch_path()?;
+        let current_branch_path = current_branch_path(&repository.root)?;
         let current_hash = fs::read_to_string(&current_branch_path)?;
-        let target_path = repository.branch_path(&args.target);
+        let target_path = branch_path(&repository.root, &args.target);
 
         if !target_path.exists() {
-            return Err(anyhow!("Branch does not exist: '{}'", args.target));
+            return Err(anyhow!(
+                "Unable to merge: branch '{}' does not exist",
+                args.target
+            ));
         }
         let target_hash = fs::read_to_string(&target_path)?;
 
         if is_ancestor(repository, &current_hash, &target_hash)? {
             fs::write(&current_branch_path, &target_hash)?;
 
-            let mut target_index = repository.load_index_from_commit(&target_hash)?;
-            let current_index = repository.load_index()?;
-            update_working_tree(repository, &mut target_index, &current_index)?;
-            repository.store_index(&target_index)?;
+            let mut target_index = Index::load_from_commit(&repository.root, &target_hash)?;
+            let current_index = Index::load(&repository.root)?;
+            update_working_tree(&repository.root, &mut target_index, &current_index)?;
+            target_index.store(&repository.root)?;
 
             return Ok(Output { hash: target_hash });
         }
 
         let base_hash = find_common_ancestor(repository, &current_hash, &target_hash)?;
 
-        let base_index = repository.load_index_from_commit(&base_hash)?;
-        let head_index = repository.load_index_from_commit(&current_hash)?;
-        let target_index = repository.load_index_from_commit(&target_hash)?;
+        let base_index = Index::load_from_commit(&repository.root, &base_hash)?;
+        let head_index = Index::load_from_commit(&repository.root, &current_hash)?;
+        let target_index = Index::load_from_commit(&repository.root, &target_hash)?;
 
         let (mut merged_index, conflicts) =
             three_way_merge(&base_index, &head_index, &target_index);
 
         if !conflicts.is_empty() {
-            fs::write(repository.merge_head_file_path(), &target_hash)?;
+            fs::write(merge_head_file_path(&repository.root), &target_hash)?;
 
-            update_working_tree(repository, &mut merged_index, &head_index)?;
-            repository.store_index(&merged_index)?;
+            update_working_tree(&repository.root, &mut merged_index, &head_index)?;
+            merged_index.store(&repository.root)?;
 
             write_conflict_markers(repository, conflicts.clone(), &head_index, &target_index)?;
 
@@ -87,12 +92,12 @@ impl commands::Command for Command {
                     .fold(String::new(), |acc, path| if acc.is_empty() {
                         path.display().to_string()
                     } else {
-                        format!("{}, {}", acc, path.display())
+                        format!("{acc}, {}", path.display())
                     })
             ));
         }
 
-        let tree_hash = repository.store_index_tree(&merged_index)?;
+        let tree_hash = merged_index.write_tree(&objects_dir_path(&repository.root))?;
         let parent_hashes = vec![current_hash.clone(), target_hash.clone()];
 
         let commit = Commit {
@@ -104,11 +109,11 @@ impl commands::Command for Command {
             parent_hashes,
         };
 
-        let commit_hash = repository.store_object(&Object::Commit(commit))?;
+        let commit_hash = Object::Commit(commit).store(&repository.root)?;
         fs::write(current_branch_path, &commit_hash)?;
 
-        update_working_tree(repository, &mut merged_index, &head_index)?;
-        repository.store_index(&merged_index)?;
+        update_working_tree(&repository.root, &mut merged_index, &head_index)?;
+        merged_index.store(&repository.root)?;
 
         Ok(Output { hash: commit_hash })
     }
@@ -125,7 +130,7 @@ fn is_ancestor(repository: &Repository, ancestor: &str, descendant: &str) -> Res
         if hash == ancestor {
             return Ok(true);
         }
-        if let Object::Commit(commit) = repository.load_object(&hash)? {
+        if let Object::Commit(commit) = Object::load(&repository.root, &hash)? {
             for parent in commit.parent_hashes {
                 queue.push_back(parent);
             }
@@ -143,7 +148,7 @@ fn find_common_ancestor(repository: &Repository, hash1: &str, hash2: &str) -> Re
         if !ancestors1.insert(hash.clone()) {
             continue;
         }
-        if let Object::Commit(commit) = repository.load_object(&hash)? {
+        if let Object::Commit(commit) = Object::load(&repository.root, &hash)? {
             for parent in commit.parent_hashes {
                 queue.push_back(parent);
             }
@@ -160,7 +165,7 @@ fn find_common_ancestor(repository: &Repository, hash1: &str, hash2: &str) -> Re
         if ancestors1.contains(&hash) {
             return Ok(hash);
         }
-        if let Object::Commit(commit) = repository.load_object(&hash)? {
+        if let Object::Commit(commit) = Object::load(&repository.root, &hash)? {
             for parent in commit.parent_hashes {
                 queue.push_back(parent);
             }
@@ -240,13 +245,13 @@ fn write_conflict_markers(
 ) -> Result<()> {
     for path in conflicts {
         let head_content = if let Some(entry) = head.entries.get(&path) {
-            repository.load_blob_text(&entry.hash)?
+            read_blob_text(&objects_dir_path(&repository.root), &entry.hash)?
         } else {
             String::new()
         };
 
         let target_content = if let Some(entry) = target.entries.get(&path) {
-            repository.load_blob_text(&entry.hash)?
+            read_blob_text(&objects_dir_path(&repository.root), &entry.hash)?
         } else {
             String::new()
         };

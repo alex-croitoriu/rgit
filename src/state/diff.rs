@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+#[derive(Default)]
 pub struct FileDiff {
     pub added: Vec<PathBuf>,
     pub deleted: Vec<PathBuf>,
@@ -11,6 +12,7 @@ pub struct TextDiffEntry {
     pub change: String,
 }
 
+#[derive(Default)]
 pub struct TextDiff {
     pub added: Vec<TextDiffEntry>,
     pub deleted: Vec<TextDiffEntry>,

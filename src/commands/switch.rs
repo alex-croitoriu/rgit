@@ -4,8 +4,10 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Head, Object, Repository},
-    utils::{unstaged_changes, update_working_tree},
+    state::{
+        Head, Index, Object, Repository, branch_path, head, unstaged_changes, update_head,
+        update_working_tree,
+    },
 };
 
 pub struct Command;
@@ -36,19 +38,19 @@ impl commands::Command for Command {
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
         let staged_changes = repository.staged_changes()?;
-        let unstaged_changes = unstaged_changes(repository)?;
+        let unstaged_changes = unstaged_changes(&repository.root)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to switch: uncommited changes"));
         }
 
-        if let Head::Branch { name } = repository.head()?
+        if let Head::Branch { name } = head(&repository.root)?
             && name == args.target
         {
             return Err(anyhow!("Unable to switch: already on '{}'", args.target));
         }
 
-        let target_branch_path = repository.branch_path(&args.target);
+        let target_branch_path = branch_path(&repository.root, &args.target);
         let target_hash;
         let target_head;
 
@@ -57,7 +59,7 @@ impl commands::Command for Command {
             target_head = Head::Branch {
                 name: args.target.clone(),
             };
-        } else if let Ok(Object::Commit(_)) = repository.load_object(&args.target) {
+        } else if let Ok(Object::Commit(_)) = Object::load(&repository.root, &args.target) {
             target_hash = args.target.clone();
             target_head = Head::Commit {
                 hash: args.target.clone(),
@@ -69,13 +71,13 @@ impl commands::Command for Command {
             ));
         }
 
-        let current_index = repository.load_index()?;
-        let mut target_index = repository.load_index_from_commit(&target_hash)?;
+        let current_index = Index::load(&repository.root)?;
+        let mut target_index = Index::load_from_commit(&repository.root, &target_hash)?;
 
-        update_working_tree(repository, &mut target_index, &current_index)?;
-        repository.store_index(&target_index)?;
+        update_working_tree(&repository.root, &mut target_index, &current_index)?;
+        target_index.store(&repository.root)?;
 
-        repository.update_head(&target_head)?;
+        update_head(&repository.root, &target_head)?;
 
         Ok(Output { head: target_head })
     }

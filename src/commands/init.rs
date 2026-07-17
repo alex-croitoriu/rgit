@@ -17,8 +17,7 @@ pub struct Output {
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Repository initialized: '{}'", self.path.display())?;
-        Ok(())
+        write!(f, "Repository initialized: '{}'", self.path.display())
     }
 }
 

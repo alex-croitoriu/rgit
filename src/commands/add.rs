@@ -4,8 +4,8 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Blob, Index, IndexEntry, Object, Repository},
-    utils::{modification_time, normalize_path},
+    state::{Blob, Index, IndexEntry, Object, Repository, ignored_paths},
+    utils::{file_mtime, normalize_path},
 };
 
 pub struct Command;
@@ -20,8 +20,7 @@ pub struct Output;
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Added path(s) to the index")?;
-        Ok(())
+        write!(f, "Added path(s) to the index")
     }
 }
 
@@ -30,7 +29,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let mut index = repository.load_index()?;
+        let mut index = Index::load(&repository.root)?;
         let mut paths = args.paths.clone();
         paths.sort_unstable();
         paths.dedup();
@@ -39,7 +38,8 @@ impl commands::Command for Command {
             add_recursive(repository, &mut index, path)?;
         }
 
-        repository.store_index(&index)?;
+        index.store(&repository.root)?;
+
         Ok(Output)
     }
 }
@@ -66,8 +66,7 @@ fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Resu
     }
 
     if absolute_path.is_file() {
-        if repository
-            .ignored()
+        if ignored_paths(&repository.root)
             .iter()
             .any(|p| relative_path.starts_with(p))
         {
@@ -78,14 +77,14 @@ fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Resu
             bytes: fs::read(&absolute_path)?,
         });
 
-        let hash = repository.store_object(&blob)?;
+        let hash = blob.store(&repository.root)?;
 
         index.add(
             relative_path,
             IndexEntry {
                 hash: hash.clone(),
                 size: absolute_path.metadata()?.len(),
-                mtime: modification_time(&absolute_path)?,
+                mtime: file_mtime(&absolute_path)?,
             },
         );
     } else if absolute_path.is_dir() {
@@ -105,8 +104,7 @@ fn add_recursive(repository: &Repository, index: &mut Index, path: &str) -> Resu
             if relative_entry_path == ".rgit" {
                 continue;
             }
-            if repository
-                .ignored()
+            if ignored_paths(&repository.root)
                 .iter()
                 .any(|p| relative_entry_path.starts_with(p))
             {

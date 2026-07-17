@@ -2,7 +2,8 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Head, Repository},
+    state::{Head, Repository, head},
+    utils::heads_dir_path,
 };
 
 pub struct Command;
@@ -39,9 +40,9 @@ impl commands::Command for Command {
 
     fn execute(repository: &Repository, (): ()) -> Result<Self::Output> {
         let mut branches = Vec::new();
-        let head = repository.head()?;
+        let head = head(&repository.root)?;
 
-        for entry in repository.heads_dir_path().read_dir()?.flatten() {
+        for entry in heads_dir_path(&repository.root).read_dir()?.flatten() {
             let branch = entry
                 .file_name()
                 .into_string()

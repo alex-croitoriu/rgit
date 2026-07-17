@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Head, Repository},
+    state::{Head, Repository, branch_path, head},
 };
 
 pub struct Command;
@@ -20,8 +20,7 @@ pub struct Output {
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Branch deleted: '{}'", self.name)?;
-        Ok(())
+        write!(f, "Branch deleted: '{}'", self.name)
     }
 }
 
@@ -30,7 +29,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let branch_path = repository.branch_path(&args.name);
+        let branch_path = branch_path(&repository.root, &args.name);
         if !branch_path.exists() {
             return Err(anyhow!(
                 "Branch not deleted: '{}' does not exist",
@@ -38,7 +37,7 @@ impl commands::Command for Command {
             ));
         }
 
-        if let Head::Branch { name } = repository.head()?
+        if let Head::Branch { name } = head(&repository.root)?
             && name == args.name
         {
             return Err(anyhow!(

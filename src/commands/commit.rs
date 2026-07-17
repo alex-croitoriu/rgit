@@ -1,10 +1,11 @@
 use std::{fs, time::SystemTime};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Commit, Object, Repository},
+    state::{Commit, Head, Index, Object, Repository, current_branch_path, head, head_hash},
+    utils::{merge_head_file_path, objects_dir_path},
 };
 
 pub struct Command;
@@ -20,8 +21,7 @@ pub struct Output {
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Commit: {}", self.hash)?;
-        Ok(())
+        write!(f, "Commit: {}", self.hash)
     }
 }
 
@@ -29,15 +29,21 @@ impl commands::Command for Command {
     type Args = Args;
     type Output = Output;
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let index = repository.load_index()?;
+        let staged_changes = repository.staged_changes()?;
 
-        let tree_hash = repository.store_index_tree(&index)?;
+        if staged_changes.is_empty() {
+            return Err(anyhow!("Commit not created: no changes"));
+        }
+        if let Head::Commit { .. } = head(&repository.root)? {
+            return Err(anyhow!("Commit not created: Detached HEAD"));
+        }
 
-        let merge_head_path = repository.merge_head_file_path();
-        let mut parent_hashes = if let Ok(path) = repository.current_branch_path()
-            && path.exists()
-        {
-            vec![fs::read_to_string(path)?]
+        let index = Index::load(&repository.root)?;
+        let tree_hash = index.write_tree(&objects_dir_path(&repository.root))?;
+        let merge_head_path = merge_head_file_path(&repository.root);
+
+        let mut parent_hashes = if let Some(head_hash) = head_hash(&repository.root)? {
+            vec![head_hash]
         } else {
             Vec::new()
         };
@@ -56,9 +62,9 @@ impl commands::Command for Command {
                 .as_secs(),
         });
 
-        let commit_hash = repository.store_object(&commit)?;
+        let commit_hash = commit.store(&repository.root)?;
 
-        fs::write(repository.current_branch_path()?, &commit_hash)?;
+        fs::write(current_branch_path(&repository.root)?, &commit_hash)?;
 
         Ok(Output { hash: commit_hash })
     }

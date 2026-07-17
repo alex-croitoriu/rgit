@@ -5,7 +5,8 @@ use similar::ChangeTag;
 
 use crate::{
     commands,
-    state::{Index, Repository, TextDiff, TextDiffEntry},
+    state::{Index, Repository, TextDiff, TextDiffEntry, branch_path, head_hash, read_blob_text},
+    utils::objects_dir_path,
 };
 
 pub struct Command;
@@ -21,9 +22,7 @@ pub struct Output {
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.diff)?;
-
-        Ok(())
+        write!(f, "{}", self.diff)
     }
 }
 
@@ -32,32 +31,26 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
+        let head_index = if let Some(hash) = head_hash(&repository.root)? {
+            Index::load_from_commit(&repository.root, &hash)?
+        } else {
+            Index::new()
+        };
+
         if let Some(target) = &args.target {
-            let branch_path = repository.branch_path(target);
+            let branch_path = branch_path(&repository.root, target);
             if !branch_path.exists() {
                 return Err(anyhow!("Branch does not exist: '{target}'"));
             }
 
             let branch_hash = fs::read_to_string(branch_path)?;
-            let branch_index = repository.load_index_from_commit(&branch_hash)?;
-
-            let head_index = if let Some(hash) = repository.head_hash()? {
-                repository.load_index_from_commit(&hash)?
-            } else {
-                Index::new()
-            };
+            let branch_index = Index::load_from_commit(&repository.root, &branch_hash)?;
 
             let diff = diff_indexes(repository, &head_index, &branch_index)?;
 
             Ok(Output { diff })
         } else {
-            let head_index = if let Some(hash) = repository.head_hash()? {
-                repository.load_index_from_commit(&hash)?
-            } else {
-                Index::new()
-            };
-
-            let current_index = repository.load_index()?;
+            let current_index = Index::load(&repository.root)?;
             let diff = diff_indexes(repository, &head_index, &current_index)?;
 
             Ok(Output { diff })
@@ -66,25 +59,29 @@ impl commands::Command for Command {
 }
 
 fn diff_indexes(repository: &Repository, from: &Index, to: &Index) -> Result<TextDiff> {
-    let (mut added, mut deleted, mut modified) = (Vec::new(), Vec::new(), Vec::new());
+    let mut diff = TextDiff::default();
 
     for (name, from_entry) in &from.entries {
         if let Some(to_entry) = to.entries.get(name) {
             if from_entry.hash != to_entry.hash {
-                let from_content = repository.load_blob_text(&from_entry.hash)?;
-                let to_content = repository.load_blob_text(&to_entry.hash)?;
-                modified.push(TextDiffEntry {
+                let from_content =
+                    read_blob_text(&objects_dir_path(&repository.root), &from_entry.hash)?;
+                let to_content =
+                    read_blob_text(&objects_dir_path(&repository.root), &to_entry.hash)?;
+                diff.modified.push(TextDiffEntry {
                     path: name.clone(),
                     change: diff_text(&from_content, &to_content)?,
                 });
             }
-        } else if let Ok(from_content) = repository.load_blob_text(&from_entry.hash) {
-            deleted.push(TextDiffEntry {
+        } else if let Ok(from_content) =
+            read_blob_text(&objects_dir_path(&repository.root), &from_entry.hash)
+        {
+            diff.deleted.push(TextDiffEntry {
                 path: name.clone(),
                 change: diff_text(&from_content, "")?,
             });
         } else {
-            deleted.push(TextDiffEntry {
+            diff.deleted.push(TextDiffEntry {
                 path: name.clone(),
                 change: String::from("Binary file"),
             });
@@ -93,13 +90,15 @@ fn diff_indexes(repository: &Repository, from: &Index, to: &Index) -> Result<Tex
 
     for (name, to_entry) in &to.entries {
         if !from.entries.contains_key(name) {
-            if let Ok(to_content) = repository.load_blob_text(&to_entry.hash) {
-                added.push(TextDiffEntry {
+            if let Ok(to_content) =
+                read_blob_text(&objects_dir_path(&repository.root), &to_entry.hash)
+            {
+                diff.added.push(TextDiffEntry {
                     path: name.clone(),
                     change: diff_text("", &to_content)?,
                 });
             } else {
-                added.push(TextDiffEntry {
+                diff.added.push(TextDiffEntry {
                     path: name.clone(),
                     change: String::from("Binary file"),
                 });
@@ -107,11 +106,7 @@ fn diff_indexes(repository: &Repository, from: &Index, to: &Index) -> Result<Tex
         }
     }
 
-    Ok(TextDiff {
-        added,
-        deleted,
-        modified,
-    })
+    Ok(diff)
 }
 
 fn diff_text(from: &str, to: &str) -> Result<String> {

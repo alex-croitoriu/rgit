@@ -4,12 +4,12 @@ use crate::state::Repository;
 
 pub mod add;
 pub mod branch;
-pub mod switch;
 pub mod commit;
 pub mod diff;
 pub mod init;
 pub mod merge;
 pub mod status;
+pub mod switch;
 
 pub trait Command {
     type Args;
