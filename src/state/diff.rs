@@ -48,14 +48,14 @@ pub fn diff_indexes(root: &Path, from: &Index, to: &Index) -> Result<Diff> {
     for (name, from_entry) in &from.entries {
         if let Some(to_entry) = to.entries.get(name) {
             if from_entry.hash != to_entry.hash {
-                let from_content = read_blob_text(&objects_dir_path(&root), &from_entry.hash)?;
-                let to_content = read_blob_text(&objects_dir_path(&root), &to_entry.hash)?;
+                let from_content = read_blob_text(&objects_dir_path(root), &from_entry.hash)?;
+                let to_content = read_blob_text(&objects_dir_path(root), &to_entry.hash)?;
                 diff.modified.push(DiffEntry {
                     path: name.clone(),
                     change: diff_text(&from_content, &to_content)?,
                 });
             }
-        } else if let Ok(from_content) = read_blob_text(&objects_dir_path(&root), &from_entry.hash)
+        } else if let Ok(from_content) = read_blob_text(&objects_dir_path(root), &from_entry.hash)
         {
             diff.deleted.push(DiffEntry {
                 path: name.clone(),
@@ -71,7 +71,7 @@ pub fn diff_indexes(root: &Path, from: &Index, to: &Index) -> Result<Diff> {
 
     for (name, to_entry) in &to.entries {
         if !from.entries.contains_key(name) {
-            if let Ok(to_content) = read_blob_text(&objects_dir_path(&root), &to_entry.hash) {
+            if let Ok(to_content) = read_blob_text(&objects_dir_path(root), &to_entry.hash) {
                 diff.added.push(DiffEntry {
                     path: name.clone(),
                     change: diff_text("", &to_content)?,

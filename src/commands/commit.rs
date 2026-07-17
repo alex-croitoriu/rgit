@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Commit, Head, Index, Object, Repository, current_branch_path, head, head_hash,
+        Commit, Head, Index, Object, Repository, current_branch_path, resolve_head, resolve_head_hash,
         staged_changes,
     },
     utils::{merge_head_file_path, objects_dir_path},
@@ -37,7 +37,7 @@ impl commands::Command for Command {
         if staged_changes.is_empty() {
             return Err(anyhow!("Commit not created: no changes"));
         }
-        if let Head::Commit { .. } = head(&repository.root)? {
+        if let Head::Detached { .. } = resolve_head(&repository.root)? {
             return Err(anyhow!("Commit not created: Detached HEAD"));
         }
 
@@ -45,7 +45,7 @@ impl commands::Command for Command {
         let tree_hash = index.write_tree(&objects_dir_path(&repository.root))?;
         let merge_head_path = merge_head_file_path(&repository.root);
 
-        let mut parent_hashes = if let Some(head_hash) = head_hash(&repository.root)? {
+        let mut parent_hashes = if let Some(head_hash) = resolve_head_hash(&repository.root)? {
             vec![head_hash]
         } else {
             Vec::new()

@@ -11,55 +11,50 @@ use crate::{
 };
 
 pub enum Head {
-    Branch { name: String },
-    Commit { hash: String },
+    Branch { name: String, hash: Option<String> },
+    Detached { hash: String },
 }
 
-pub fn head(root: &Path) -> Result<Head> {
-    let content = fs::read_to_string(head_file_path(root))?;
-
-    if let Some(head) = content.strip_prefix("ref: ") {
-        let branch = PathBuf::from(head)
-            .file_name()
-            .ok_or(anyhow!("Current branch not found"))?
-            .to_string_lossy()
-            .to_string();
-        Ok(Head::Branch { name: branch })
-    } else if let Ok(Object::Commit(_)) = Object::load(root, &content) {
-        Ok(Head::Commit { hash: content })
-    } else {
-        Err(anyhow!("Corrupt HEAD file"))
-    }
-}
-
-pub fn head_hash(root: &Path) -> Result<Option<String>> {
+pub fn resolve_head(root: &Path) -> Result<Head> {
     let content = fs::read_to_string(head_file_path(root))?;
 
     if let Some(head) = content.strip_prefix("ref: ") {
         let path = root.join(".rgit").join(head);
+        let name = path
+            .file_name()
+            .ok_or(anyhow!("Unable to resolve HEAD"))?
+            .to_str()
+            .ok_or(anyhow!("Unable to resolve HEAD"))?
+            .to_owned();
         if path.exists() {
             let hash = fs::read_to_string(path)?;
-            Ok(Some(hash))
-        } else if let Some(file) = path.file_name()
-            && file.to_string_lossy() == "master"
-        {
-            Ok(None)
+            Ok(Head::Branch {
+                name,
+                hash: Some(hash),
+            })
         } else {
-            Err(anyhow!("Corrupt HEAD file"))
+            Ok(Head::Branch { name, hash: None })
         }
     } else if let Ok(Object::Commit(_)) = Object::load(root, &content) {
-        Ok(Some(content))
+        Ok(Head::Detached { hash: content })
     } else {
-        Err(anyhow!("Corrupt HEAD file"))
+        Err(anyhow!("Unable to resolve HEAD"))
+    }
+}
+
+pub fn resolve_head_hash(root: &Path) -> Result<Option<String>> {
+    match resolve_head(root)? {
+        Head::Branch { hash, .. } => Ok(hash),
+        Head::Detached { hash } => Ok(Some(hash)),
     }
 }
 
 pub fn update_head(root: &Path, target: &Head) -> Result<()> {
     match target {
-        Head::Branch { name } => {
+        Head::Branch { name, .. } => {
             fs::write(head_file_path(root), format!("ref: refs/heads/{name}"))?;
         }
-        Head::Commit { hash } => {
+        Head::Detached { hash } => {
             fs::write(head_file_path(root), hash)?;
         }
     }

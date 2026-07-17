@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::{
     commands,
-    state::{Changes, Head, Repository, head, staged_changes, unstaged_changes},
+    state::{Changes, Head, Repository, resolve_head, staged_changes, unstaged_changes},
 };
 
 pub struct Command;
@@ -16,8 +16,8 @@ pub struct Output {
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.head {
-            Head::Branch { name } => write!(f, "On branch: {name}")?,
-            Head::Commit { hash } => write!(f, "Detached HEAD: {hash}")?,
+            Head::Branch { name, .. } => write!(f, "On branch: {name}")?,
+            Head::Detached { hash } => write!(f, "Detached HEAD: {hash}")?,
         }
         if !self.staged.is_empty() {
             write!(f, "\n\nStaged changes:")?;
@@ -37,7 +37,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, (): ()) -> Result<Self::Output> {
-        let head = head(&repository.root)?;
+        let head = resolve_head(&repository.root)?;
         let staged = staged_changes(&repository.root)?;
         let unstaged = unstaged_changes(&repository.root)?;
 

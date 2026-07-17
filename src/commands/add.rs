@@ -124,5 +124,6 @@ fn add_recursive(
     } else {
         return Err(anyhow!("Invalid path: '{}'", relative_path.display()));
     }
+    
     Ok(())
 }

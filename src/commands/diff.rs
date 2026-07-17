@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Diff, Index, Repository, branch_path, diff_indexes, head_hash},
+    state::{Diff, Index, Repository, branch_path, diff_indexes, resolve_head_hash},
 };
 
 pub struct Command;
@@ -29,7 +29,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let head_index = if let Some(hash) = head_hash(&repository.root)? {
+        let head_index = if let Some(hash) = resolve_head_hash(&repository.root)? {
             Index::load_from_commit(&repository.root, &hash)?
         } else {
             Index::new()

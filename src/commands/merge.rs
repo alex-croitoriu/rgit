@@ -264,5 +264,6 @@ fn write_conflict_markers(
         }
         fs::write(absolute_path, content)?;
     }
+    
     Ok(())
 }

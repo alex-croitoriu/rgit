@@ -47,7 +47,7 @@ impl Index {
         if self.entries.remove(path).is_some() {
             Ok(())
         } else {
-            Err(anyhow!("File not in index: '{}'", path.display()))
+            Err(anyhow!("Unable to remove: file '{}' not in index", path.display()))
         }
     }
 

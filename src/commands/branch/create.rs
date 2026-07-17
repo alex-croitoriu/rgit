@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Repository, branch_path, head_hash},
+    state::{Repository, branch_path, resolve_head_hash},
 };
 
 pub struct Command;
@@ -37,7 +37,7 @@ impl commands::Command for Command {
             ));
         }
 
-        if let Some(hash) = head_hash(&repository.root)? {
+        if let Some(hash) = resolve_head_hash(&repository.root)? {
             fs::write(branch_path, hash)?;
         } else {
             return Err(anyhow!("Branch not created: no commits on HEAD yet"));
