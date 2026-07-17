@@ -37,9 +37,9 @@ pub fn dispatch(command: Commands) -> Result<Box<dyn std::fmt::Display>> {
             let output = diff::Command::execute(&repository, args)?;
             Ok(Box::new(output))
         }
-        Commands::Checkout(args) => {
+        Commands::Switch(args) => {
             let repository = Repository::load()?;
-            let output = checkout::Command::execute(&repository, args)?;
+            let output = switch::Command::execute(&repository, args)?;
             Ok(Box::new(output))
         }
         Commands::Branch(BranchSubcommands::List) => {

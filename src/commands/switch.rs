@@ -39,13 +39,13 @@ impl commands::Command for Command {
         let unstaged_changes = unstaged_changes(repository)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
-            return Err(anyhow!("Unable to checkout: uncommited changes"));
+            return Err(anyhow!("Unable to switch: uncommited changes"));
         }
 
         if let Head::Branch { name } = repository.head()?
             && name == args.target
         {
-            return Err(anyhow!("Unable to checkout: already on '{}'", args.target));
+            return Err(anyhow!("Unable to switch: already on '{}'", args.target));
         }
 
         let target_branch_path = repository.branch_path(&args.target);
@@ -64,7 +64,7 @@ impl commands::Command for Command {
             };
         } else {
             return Err(anyhow!(
-                "Unable to checkout: target '{}' is invalid",
+                "Unable to switch: target '{}' is invalid",
                 args.target
             ));
         }

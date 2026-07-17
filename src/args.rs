@@ -25,7 +25,7 @@ pub enum Commands {
     /// Show changes between the index and the last commit or between the index and a branch
     Diff(diff::Args),
     /// Switch to another branch
-    Checkout(checkout::Args),
+    Switch(switch::Args),
     /// List, create or delete branches
     #[command(subcommand)]
     Branch(BranchSubcommands),
