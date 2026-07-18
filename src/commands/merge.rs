@@ -44,7 +44,6 @@ impl commands::Command for Command {
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to merge: uncommited changes"));
         }
-
         let Head::Branch { hash, name } = resolve_head(&repo.root)? else {
             return Err(anyhow!("Unable to merge: Detached HEAD"));
         };
@@ -63,7 +62,7 @@ impl commands::Command for Command {
             ));
         }
         let target_hash = trimmed_file_content(&target_path)?;
-        
+
         if is_ancestor(repo, &target_hash, &head_hash)? {
             return Err(anyhow!("Unable to merge: already up to date"));
         }

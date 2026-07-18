@@ -6,57 +6,31 @@ use crate::{
     state::Repository,
 };
 
-pub fn dispatch(command: Commands) -> Result<Box<dyn std::fmt::Display>> {
+pub fn dispatch(command: Commands) -> Result<String> {
     match command {
-        Commands::Init => {
-            let output = init::Command::execute(())?;
-            Ok(Box::new(output))
-        }
+        Commands::Init => Ok(init::Command::execute(())?.to_string()),
         command => {
             let repo = Repository::load()?;
 
             match command {
                 Commands::Init => unreachable!(),
-                Commands::Status => {
-                    let output = status::Command::execute(&repo, ())?;
-                    Ok(Box::new(output))
-                }
-                Commands::Add(args) => {
-                    let output = add::Command::execute(&repo, args)?;
-                    Ok(Box::new(output))
-                }
-                Commands::Commit(args) => {
-                    let output = commit::Command::execute(&repo, args)?;
-                    Ok(Box::new(output))
-                }
-                Commands::Log => {
-                    // let output = status::Command::execute(&repo, ())?;
-                    Ok(Box::new(String::from("not implemented")))
-                }
-                Commands::Diff(args) => {
-                    let output = diff::Command::execute(&repo, args)?;
-                    Ok(Box::new(output))
-                }
-                Commands::Switch(args) => {
-                    let output = switch::Command::execute(&repo, args)?;
-                    Ok(Box::new(output))
-                }
+                Commands::Status => Ok(status::Command::execute(&repo, ())?.to_string()),
+                Commands::Add(args) => Ok(add::Command::execute(&repo, args)?.to_string()),
+                Commands::Rm(args) => Ok(rm::Command::execute(&repo, args)?.to_string()),
+                Commands::Commit(args) => Ok(commit::Command::execute(&repo, args)?.to_string()),
+                Commands::Log => Ok(String::from("not implemented")),
+                Commands::Diff(args) => Ok(diff::Command::execute(&repo, args)?.to_string()),
+                Commands::Switch(args) => Ok(switch::Command::execute(&repo, args)?.to_string()),
                 Commands::Branch(BranchSubcommands::List) => {
-                    let output = branch::list::Command::execute(&repo, ())?;
-                    Ok(Box::new(output))
+                    Ok(branch::list::Command::execute(&repo, ())?.to_string())
                 }
                 Commands::Branch(BranchSubcommands::Create(args)) => {
-                    let output = branch::create::Command::execute(&repo, args)?;
-                    Ok(Box::new(output))
+                    Ok(branch::create::Command::execute(&repo, args)?.to_string())
                 }
                 Commands::Branch(BranchSubcommands::Delete(args)) => {
-                    let output = branch::delete::Command::execute(&repo, args)?;
-                    Ok(Box::new(output))
+                    Ok(branch::delete::Command::execute(&repo, args)?.to_string())
                 }
-                Commands::Merge(args) => {
-                    let output = merge::Command::execute(&repo, args)?;
-                    Ok(Box::new(output))
-                }
+                Commands::Merge(args) => Ok(merge::Command::execute(&repo, args)?.to_string()),
             }
         }
     }

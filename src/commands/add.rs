@@ -66,8 +66,8 @@ fn validate_path(root: &Path, path: &Path, index: &Index) -> Result<()> {
         .map_err(|_| anyhow!("path '{}' is outside repository", path.display()))?;
 
     if !path.exists() {
-        let tracked = index.entries.keys().any(|p| p.starts_with(relative_path));
-        if !tracked {
+        let indexed = index.entries.keys().any(|p| p.starts_with(relative_path));
+        if !indexed {
             return Err(anyhow!("path '{}' is invalid", path.display()));
         }
         return Ok(());

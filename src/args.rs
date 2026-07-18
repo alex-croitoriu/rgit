@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::commands::{add, branch, commit, diff, merge, switch};
+use crate::commands::{add, branch, commit, diff, merge, rm, switch};
 
 #[derive(Parser)]
 #[command(name = "rgit")]
@@ -18,6 +18,8 @@ pub enum Commands {
     Status,
     /// Add file contents to the index
     Add(add::Args),
+    /// Remove file contents from the index
+    Rm(rm::Args),
     /// Record changes to the repository
     Commit(commit::Args),
     /// Show commit history
