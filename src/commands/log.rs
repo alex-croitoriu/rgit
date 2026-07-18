@@ -1,22 +1,17 @@
-use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 
 use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Object, Repository, resolve_head_hash},
+    state::{Head, Object, Repository},
     utils::{heads_dir_path, trimmed_file_content},
 };
 
 pub struct Command;
 
-#[derive(clap::Args)]
-pub struct Args {
-    #[arg(required = true)]
-    paths: Vec<String>,
-}
-
 pub struct Output {
+    head: Head,
     commits: Vec<CommitEntry>,
 }
 
@@ -26,10 +21,31 @@ impl std::fmt::Display for Output {
             return write!(f, "No commits yet");
         };
 
-        if let Some(branch) = &commit.branch {
-            writeln!(f, "{} (HEAD -> {})", commit.hash, branch)?;
-        } else {
-            write!(f, "{} (Detached HEAD)", commit.hash)?;
+        let branches = commit.branches.clone().into_iter().flatten();
+
+        match &self.head {
+            Head::Branch { name, .. } => {
+                writeln!(
+                    f,
+                    "{} ({})",
+                    commit.hash,
+                    std::iter::once(format!("HEAD -> {name}"))
+                        .chain(branches.filter(|b| b != name))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )?;
+            }
+            Head::Detached { .. } => {
+                writeln!(
+                    f,
+                    "{} ({})",
+                    commit.hash,
+                    std::iter::once(String::from("Detached HEAD"))
+                        .chain(branches)
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )?;
+            }
         }
 
         writeln!(f, "{:<10} {}", "Date:", commit.timestamp)?;
@@ -37,8 +53,8 @@ impl std::fmt::Display for Output {
 
         for commit in self.commits.iter().skip(1) {
             writeln!(f)?;
-            if let Some(branch) = &commit.branch {
-                writeln!(f, "{} ({})", commit.hash, branch)?;
+            if let Some(branches) = &commit.branches {
+                writeln!(f, "{} ({})", commit.hash, branches.join(", "))?;
             } else {
                 writeln!(f, "{}", commit.hash)?;
             }
@@ -56,18 +72,20 @@ struct CommitEntry {
     hash: String,
     message: String,
     timestamp: u64,
-    branch: Option<String>,
-}
-
-impl std::cmp::Ord for CommitEntry {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.timestamp.cmp(&other.timestamp)
-    }
+    branches: Option<Vec<String>>,
 }
 
 impl std::cmp::PartialOrd for CommitEntry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.timestamp.cmp(&other.timestamp))
+        Some(self.cmp(other))
+    }
+}
+
+impl std::cmp::Ord for CommitEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.timestamp
+            .cmp(&other.timestamp)
+            .then_with(|| self.hash.cmp(&other.hash))
     }
 }
 
@@ -77,7 +95,7 @@ impl commands::Command for Command {
 
     fn execute(repo: &Repository, (): ()) -> Result<Self::Output> {
         let mut commits = BinaryHeap::new();
-        let mut branches = HashMap::new();
+        let mut branches = HashMap::<String, Vec<String>>::new();
 
         for entry in heads_dir_path(&repo.root).read_dir()?.flatten() {
             let commit_hash = trimmed_file_content(&entry.path())?;
@@ -85,20 +103,30 @@ impl commands::Command for Command {
                 .file_name()
                 .into_string()
                 .map_err(|_| anyhow!("Invalid UTF-8"))?;
-            branches.insert(commit_hash, branch_name);
+            branches
+                .entry(commit_hash)
+                .and_modify(|e| e.push(branch_name.clone()))
+                .or_insert(vec![branch_name]);
         }
-        let head = resolve_head_hash(&repo.root)?;
+        let head = Head::load(&repo.root)?;
 
-        let mut queue = head.into_iter().collect::<VecDeque<String>>();
+        let mut queue = head.hash().into_iter().collect::<VecDeque<String>>();
+
+        let mut visited = HashSet::new();
 
         while let Some(hash) = queue.pop_front() {
+            if !visited.insert(hash.clone()) {
+                continue;
+            }
             if let Object::Commit(commit) = Object::load(&repo.root, &hash)? {
-                queue.extend(commit.parent_hashes.clone());
+                for parent_hash in commit.parent_hashes {
+                    queue.push_back(parent_hash);
+                }
                 commits.push(CommitEntry {
                     hash: hash.clone(),
                     message: commit.message,
                     timestamp: commit.timestamp,
-                    branch: branches.get(&hash).cloned(),
+                    branches: branches.get(&hash).cloned(),
                 });
             }
         }
@@ -106,6 +134,6 @@ impl commands::Command for Command {
         let mut commits = commits.into_sorted_vec();
         commits.reverse();
 
-        Ok(Output { commits })
+        Ok(Output { head, commits })
     }
 }
