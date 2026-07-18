@@ -84,7 +84,10 @@ impl Object {
     }
 
     pub fn load(root: &Path, hash: &str) -> Result<Self> {
-        let (dir, file) = hash.split_at(2);
+        let Some((dir, file)) = hash.split_at_checked(2) else {
+            return Err(anyhow!("Invalid hash: {hash}"));
+        };
+
         let path = objects_dir_path(root).join(dir).join(file);
 
         let compressed = fs::read(path)?;
