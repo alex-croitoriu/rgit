@@ -63,6 +63,10 @@ impl commands::Command for Command {
             ));
         }
         let target_hash = trimmed_file_content(&target_path)?;
+        
+        if is_ancestor(repo, &target_hash, &head_hash)? {
+            return Err(anyhow!("Unable to merge: already up to date"));
+        }
 
         if is_ancestor(repo, &head_hash, &target_hash)? {
             fs::write(current_branch_path, &target_hash)?;
@@ -265,7 +269,7 @@ fn write_conflict_markers(
         match (head_content, target_content) {
             (Some(head_content), Some(target_content)) => {
                 let content = format!(
-                    "<<<<<<< HEAD\n{head_content}\n=======\n{target_content}\n>>>>>>> {target_name}\n"
+                    "<<<<<<< HEAD\n{head_content}\n=======\n{target_content}\n>>>>>>> {target_name}"
                 );
 
                 let absolute_path = repo.root.join(path);
