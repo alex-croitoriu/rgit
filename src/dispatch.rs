@@ -18,7 +18,7 @@ pub fn dispatch(command: Commands) -> Result<String> {
                 Commands::Add(args) => Ok(add::Command::execute(&repo, args)?.to_string()),
                 Commands::Rm(args) => Ok(rm::Command::execute(&repo, args)?.to_string()),
                 Commands::Commit(args) => Ok(commit::Command::execute(&repo, args)?.to_string()),
-                Commands::Log => Ok(String::from("not implemented")),
+                Commands::Log => Ok(log::Command::execute(&repo, ())?.to_string()),
                 Commands::Diff(args) => Ok(diff::Command::execute(&repo, args)?.to_string()),
                 Commands::Switch(args) => Ok(switch::Command::execute(&repo, args)?.to_string()),
                 Commands::Branch(BranchSubcommands::List) => {

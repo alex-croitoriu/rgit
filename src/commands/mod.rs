@@ -7,6 +7,7 @@ pub mod branch;
 pub mod commit;
 pub mod diff;
 pub mod init;
+pub mod log;
 pub mod merge;
 pub mod rm;
 pub mod status;

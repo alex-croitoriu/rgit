@@ -17,13 +17,13 @@ impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.head {
             Head::Branch { name, .. } => {
-                write!(f, "{name} -> HEAD")?;
+                write!(f, "HEAD -> {name}")?;
                 for branch in self.branches.iter().filter(|b| b != &name) {
                     write!(f, "\n{branch}")?;
                 }
             }
             Head::Detached { hash } => {
-                write!(f, "{hash} -> Detached HEAD")?;
+                write!(f, "Detached HEAD -> {hash}")?;
                 for branch in &self.branches {
                     write!(f, "\n{branch}")?;
                 }
