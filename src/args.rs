@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::commands::*;
+use crate::commands::{add, branch, commit, diff, merge, switch};
 
 #[derive(Parser)]
 #[command(name = "rgit")]

@@ -34,10 +34,10 @@ impl commands::StatelessCommand for Command {
             ));
         }
 
-        fs::create_dir_all(".rgit/objects")?;
-        fs::create_dir_all(".rgit/refs/heads")?;
-        File::create_new(".rgit/index")?;
-        File::create_new(".rgit/HEAD")?.write_all(b"ref: refs/heads/master")?;
+        fs::create_dir_all(current_dir.join(".rgit/objects"))?;
+        fs::create_dir_all(current_dir.join(".rgit/refs/heads"))?;
+        File::create_new(current_dir.join(".rgit/index"))?;
+        File::create_new(current_dir.join(".rgit/HEAD"))?.write_all(b"ref: refs/heads/master")?;
 
         Ok(Output { path: current_dir })
     }

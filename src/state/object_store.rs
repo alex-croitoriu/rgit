@@ -55,13 +55,17 @@ impl Object {
     }
 
     pub fn hash(&self) -> Result<String> {
+        use std::fmt::Write;
+
         let mut hasher = Sha1::new();
         hasher.update(self.serialize()?);
-        let result = hasher.finalize();
+        let hash = hasher.finalize();
+        let mut digest = String::new();
+        for byte in hash {
+            write!(digest, "{byte:02x}")?;
+        }
 
-        Ok(result
-            .iter()
-            .fold(String::new(), |acc, byte| format!("{acc}{byte:02x}")))
+        Ok(digest)
     }
 
     pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
@@ -79,20 +83,20 @@ impl Object {
         Ok(decompressed)
     }
 
-    pub fn read(objects_dir: &Path, hash: &str) -> Result<Self> {
+    pub fn load(root: &Path, hash: &str) -> Result<Self> {
         let (dir, file) = hash.split_at(2);
-        let path = objects_dir.join(dir).join(file);
+        let path = objects_dir_path(root).join(dir).join(file);
 
         let compressed = fs::read(path)?;
 
         Self::deserialize(&Self::decompress(&compressed)?)
     }
 
-    pub fn write(&self, objects_dir: &Path) -> Result<String> {
+    pub fn store(&self, root: &Path) -> Result<String> {
         let hash = self.hash()?;
         let (dir_name, file_name) = hash.split_at(2);
 
-        let dir_path = objects_dir.join(dir_name);
+        let dir_path = objects_dir_path(root).join(dir_name);
         let file_path = dir_path.join(file_name);
 
         if !file_path.exists() {
@@ -104,27 +108,19 @@ impl Object {
         Ok(hash)
     }
 
-    pub fn load(root: &Path, hash: &str) -> Result<Self> {
-        Self::read(&objects_dir_path(root), hash)
+    pub fn blob_bytes(&self) -> Result<Vec<u8>> {
+        if let Object::Blob(blob) = self {
+            Ok(blob.bytes.clone())
+        } else {
+            Err(anyhow!("Object is not a blob"))
+        }
     }
 
-    pub fn store(&self, root: &Path) -> Result<String> {
-        self.write(&objects_dir_path(root))
-    }
-}
-
-pub fn read_blob_bytes(objects_dir: &Path, hash: &str) -> Result<Vec<u8>> {
-    if let Object::Blob(blob) = Object::read(objects_dir, hash)? {
-        Ok(blob.bytes)
-    } else {
-        Err(anyhow!("Object is not a blob: {hash}"))
-    }
-}
-
-pub fn read_blob_text(objects_dir: &Path, hash: &str) -> Result<String> {
-    if let Ok(text) = String::from_utf8(read_blob_bytes(objects_dir, hash)?) {
-        Ok(text)
-    } else {
-        Ok(String::from("Binary file"))
+    pub fn blob_text(&self) -> Result<Option<String>> {
+        if let Ok(text) = String::from_utf8(self.blob_bytes()?) {
+            Ok(Some(text))
+        } else {
+            Ok(None)
+        }
     }
 }

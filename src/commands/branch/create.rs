@@ -28,8 +28,8 @@ impl commands::Command for Command {
     type Args = Args;
     type Output = Output;
 
-    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let branch_path = branch_path(&repository.root, &args.name);
+    fn execute(repo: &Repository, args: Self::Args) -> Result<Self::Output> {
+        let branch_path = branch_path(&repo.root, &args.name);
         if branch_path.exists() {
             return Err(anyhow!(
                 "Branch not created: '{}' already exists",
@@ -37,7 +37,7 @@ impl commands::Command for Command {
             ));
         }
 
-        if let Some(hash) = resolve_head_hash(&repository.root)? {
+        if let Some(hash) = resolve_head_hash(&repo.root)? {
             fs::write(branch_path, hash)?;
         } else {
             return Err(anyhow!("Branch not created: no commits on HEAD yet"));

@@ -6,10 +6,7 @@ use std::{
 use anyhow::Result;
 use similar::ChangeTag;
 
-use crate::{
-    state::{Index, read_blob_text},
-    utils::objects_dir_path,
-};
+use crate::state::{Index, Object};
 
 pub struct DiffEntry {
     pub path: PathBuf,
@@ -48,40 +45,49 @@ pub fn diff_indexes(root: &Path, from: &Index, to: &Index) -> Result<Diff> {
     for (name, from_entry) in &from.entries {
         if let Some(to_entry) = to.entries.get(name) {
             if from_entry.hash != to_entry.hash {
-                let from_content = read_blob_text(&objects_dir_path(root), &from_entry.hash)?;
-                let to_content = read_blob_text(&objects_dir_path(root), &to_entry.hash)?;
+                let change = match (
+                    Object::load(root, &from_entry.hash)?.blob_text()?,
+                    Object::load(root, &to_entry.hash)?.blob_text()?,
+                ) {
+                    (Some(from_content), Some(to_content)) => {
+                        diff_text(&from_content, &to_content)?
+                    }
+                    _ => String::from("Binary file"),
+                };
+
                 diff.modified.push(DiffEntry {
                     path: name.clone(),
-                    change: diff_text(&from_content, &to_content)?,
+                    change,
                 });
             }
-        } else if let Ok(from_content) = read_blob_text(&objects_dir_path(root), &from_entry.hash)
-        {
-            diff.deleted.push(DiffEntry {
-                path: name.clone(),
-                change: diff_text(&from_content, "")?,
-            });
         } else {
+            let change =
+                if let Some(from_content) = Object::load(root, &from_entry.hash)?.blob_text()? {
+                    diff_text(&from_content, "")?
+                } else {
+                    String::from("Binary file")
+                };
+
             diff.deleted.push(DiffEntry {
                 path: name.clone(),
-                change: String::from("Binary file"),
+                change,
             });
         }
     }
 
     for (name, to_entry) in &to.entries {
         if !from.entries.contains_key(name) {
-            if let Ok(to_content) = read_blob_text(&objects_dir_path(root), &to_entry.hash) {
-                diff.added.push(DiffEntry {
-                    path: name.clone(),
-                    change: diff_text("", &to_content)?,
-                });
-            } else {
-                diff.added.push(DiffEntry {
-                    path: name.clone(),
-                    change: String::from("Binary file"),
-                });
-            }
+            let change =
+                if let Some(to_content) = Object::load(root, &to_entry.hash)?.blob_text()? {
+                    diff_text("", &to_content)?
+                } else {
+                    String::from("Binary file")
+                };
+
+            diff.added.push(DiffEntry {
+                path: name.clone(),
+                change,
+            });
         }
     }
 

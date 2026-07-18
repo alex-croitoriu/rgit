@@ -1,13 +1,12 @@
-use std::fs;
-
 use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
     state::{
-        Head, Index, Object, Repository, branch_path, resolve_head, staged_changes, unstaged_changes,
-        update_head, update_working_tree,
+        Head, Index, Object, Repository, branch_path, resolve_head, staged_changes,
+        unstaged_changes, update_head, update_working_tree,
     },
+    utils::trimmed_file_content,
 };
 
 pub struct Command;
@@ -34,31 +33,31 @@ impl commands::Command for Command {
     type Args = Args;
     type Output = Output;
 
-    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let staged_changes = staged_changes(&repository.root)?;
-        let unstaged_changes = unstaged_changes(&repository.root)?;
+    fn execute(repo: &Repository, args: Self::Args) -> Result<Self::Output> {
+        let staged_changes = staged_changes(&repo.root)?;
+        let unstaged_changes = unstaged_changes(&repo.root)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to switch: uncommited changes"));
         }
 
-        if let Head::Branch { name, .. } = resolve_head(&repository.root)?
+        if let Head::Branch { name, .. } = resolve_head(&repo.root)?
             && name == args.target
         {
             return Err(anyhow!("Unable to switch: already on '{}'", args.target));
         }
 
-        let target_branch_path = branch_path(&repository.root, &args.target);
+        let target_branch_path = branch_path(&repo.root, &args.target);
         let target_hash;
         let target_head;
 
         if target_branch_path.exists() {
-            target_hash = fs::read_to_string(target_branch_path)?;
+            target_hash = trimmed_file_content(&target_branch_path)?;
             target_head = Head::Branch {
                 name: args.target.clone(),
-                hash: Some(target_hash.clone())
+                hash: Some(target_hash.clone()),
             };
-        } else if let Ok(Object::Commit(_)) = Object::load(&repository.root, &args.target) {
+        } else if let Ok(Object::Commit(_)) = Object::load(&repo.root, &args.target) {
             target_hash = args.target.clone();
             target_head = Head::Detached {
                 hash: args.target.clone(),
@@ -70,13 +69,13 @@ impl commands::Command for Command {
             ));
         }
 
-        let current_index = Index::load(&repository.root)?;
-        let mut target_index = Index::load_from_commit(&repository.root, &target_hash)?;
+        let current_index = Index::load(&repo.root)?;
+        let mut target_index = Index::load_from_commit(&repo.root, &target_hash)?;
 
-        update_working_tree(&repository.root, &mut target_index, &current_index)?;
-        target_index.store(&repository.root)?;
+        update_working_tree(&repo.root, &mut target_index, &current_index)?;
+        target_index.store(&repo.root)?;
 
-        update_head(&repository.root, &target_head)?;
+        update_head(&repo.root, &target_head)?;
 
         Ok(Output { head: target_head })
     }

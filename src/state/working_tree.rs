@@ -7,8 +7,8 @@ use std::{
 use anyhow::Result;
 
 use crate::{
-    state::{Index, read_blob_bytes},
-    utils::{file_mtime, file_size, objects_dir_path},
+    state::{Index, Object},
+    utils::{file_mtime, file_size, normalize_path},
 };
 
 pub fn ignored_paths(root: &Path) -> Vec<PathBuf> {
@@ -17,16 +17,16 @@ pub fn ignored_paths(root: &Path) -> Vec<PathBuf> {
         let reader = BufReader::new(file);
 
         for line in reader.lines().map_while(Result::ok) {
-            ignored.push(PathBuf::from(line));
+            ignored.push(normalize_path(&PathBuf::from(line)));
         }
     }
 
     ignored
 }
 
-pub fn update_working_tree(root: &Path, index: &mut Index, old_index: &Index) -> Result<()> {
+pub fn update_working_tree(root: &Path, new_index: &mut Index, old_index: &Index) -> Result<()> {
     for path in old_index.entries.keys() {
-        if !index.entries.contains_key(path) {
+        if !new_index.entries.contains_key(path) {
             let absolute_path = root.join(path);
             if absolute_path.exists() {
                 fs::remove_file(absolute_path)?;
@@ -34,16 +34,20 @@ pub fn update_working_tree(root: &Path, index: &mut Index, old_index: &Index) ->
         }
     }
 
-    for (path, entry) in &mut index.entries {
-        let bytes = read_blob_bytes(&objects_dir_path(root), &entry.hash)?;
+    for (path, new_entry) in &mut new_index.entries {
+        if let Some(old_entry) = old_index.entries.get(path) && new_entry.hash == old_entry.hash {
+            continue;
+        }
+
+        let bytes = Object::load(root, &new_entry.hash)?.blob_bytes()?;
         let absolute_path = root.join(path);
         if let Some(parent) = absolute_path.parent() {
             fs::create_dir_all(parent)?;
         }
         fs::write(&absolute_path, bytes)?;
 
-        entry.mtime = file_mtime(&absolute_path)?;
-        entry.size = file_size(&absolute_path)?;
+        new_entry.mtime = file_mtime(&absolute_path)?;
+        new_entry.size = file_size(&absolute_path)?;
     }
 
     Ok(())

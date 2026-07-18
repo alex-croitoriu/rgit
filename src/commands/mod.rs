@@ -15,7 +15,7 @@ pub trait Command {
     type Args;
     type Output;
 
-    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output>;
+    fn execute(repo: &Repository, args: Self::Args) -> Result<Self::Output>;
 }
 
 pub trait StatelessCommand {

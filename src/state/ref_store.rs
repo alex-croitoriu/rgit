@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     state::Object,
-    utils::{head_file_path, heads_dir_path, normalize_path},
+    utils::{head_file_path, heads_dir_path, trimmed_file_content},
 };
 
 pub enum Head {
@@ -16,7 +16,7 @@ pub enum Head {
 }
 
 pub fn resolve_head(root: &Path) -> Result<Head> {
-    let content = fs::read_to_string(head_file_path(root))?;
+    let content = trimmed_file_content(&head_file_path(root))?;
 
     if let Some(head) = content.strip_prefix("ref: ") {
         let path = root.join(".rgit").join(head);
@@ -25,9 +25,9 @@ pub fn resolve_head(root: &Path) -> Result<Head> {
             .ok_or(anyhow!("Unable to resolve HEAD"))?
             .to_str()
             .ok_or(anyhow!("Unable to resolve HEAD"))?
-            .to_owned();
+            .to_string();
         if path.exists() {
-            let hash = fs::read_to_string(path)?;
+            let hash = trimmed_file_content(&path)?;
             Ok(Head::Branch {
                 name,
                 hash: Some(hash),
@@ -64,15 +64,4 @@ pub fn update_head(root: &Path, target: &Head) -> Result<()> {
 
 pub fn branch_path(root: &Path, name: &str) -> PathBuf {
     heads_dir_path(root).join(name)
-}
-
-pub fn current_branch_path(root: &Path) -> Result<PathBuf> {
-    let content = fs::read_to_string(head_file_path(root))?;
-
-    if let Some(head) = content.strip_prefix("ref: ") {
-        let path = normalize_path(&root.join(".rgit").join(head));
-        Ok(path)
-    } else {
-        Err(anyhow!("Corrupt HEAD file"))
-    }
 }

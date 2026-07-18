@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::{
-    state::{Index, resolve_head_hash, ignored_paths},
-    utils::file_mtime,
+    state::{Index, ignored_paths, resolve_head_hash},
+    utils::{file_mtime, file_size},
 };
 
 #[derive(Default)]
@@ -76,13 +76,13 @@ pub fn unstaged_changes(root: &Path) -> Result<Changes> {
 
     let index = Index::load(root)?;
     let mut stack = vec![root.to_path_buf()];
-    let ignored = ignored_paths(root);
+    let ignored_paths = ignored_paths(root);
 
     while let Some(path) = stack.pop() {
         if path.is_file() {
             let relative_path = path.strip_prefix(root)?;
             if let Some(entry) = index.entries.get(relative_path) {
-                if entry.size != path.metadata()?.len() || entry.mtime != file_mtime(&path)? {
+                if entry.size != file_size(&path)? || entry.mtime != file_mtime(&path)? {
                     diff.modified.push(relative_path.to_path_buf());
                 }
             } else {
@@ -96,7 +96,7 @@ pub fn unstaged_changes(root: &Path) -> Result<Changes> {
                 if relative_path == ".rgit" {
                     continue;
                 }
-                if ignored.iter().any(|p| relative_path.starts_with(p)) {
+                if ignored_paths.iter().any(|p| relative_path.starts_with(p)) {
                     continue;
                 }
 
@@ -106,7 +106,7 @@ pub fn unstaged_changes(root: &Path) -> Result<Changes> {
                     if index
                         .entries
                         .iter()
-                        .any(|(name, _)| PathBuf::from(&name).starts_with(relative_path))
+                        .any(|(name, _)| name.starts_with(relative_path))
                     {
                         stack.push(entry_path);
                     } else if entry_path.read_dir()?.count() > 0 {

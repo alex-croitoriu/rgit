@@ -28,8 +28,8 @@ impl commands::Command for Command {
     type Args = Args;
     type Output = Output;
 
-    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let branch_path = branch_path(&repository.root, &args.name);
+    fn execute(repo: &Repository, args: Self::Args) -> Result<Self::Output> {
+        let branch_path = branch_path(&repo.root, &args.name);
         if !branch_path.exists() {
             return Err(anyhow!(
                 "Branch not deleted: '{}' does not exist",
@@ -37,7 +37,7 @@ impl commands::Command for Command {
             ));
         }
 
-        if let Head::Branch { name, .. } = resolve_head(&repository.root)?
+        if let Head::Branch { name, .. } = resolve_head(&repo.root)?
             && name == args.name
         {
             return Err(anyhow!(

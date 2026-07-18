@@ -4,11 +4,8 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{
-        Commit, Head, Index, Object, Repository, current_branch_path, resolve_head, resolve_head_hash,
-        staged_changes,
-    },
-    utils::{merge_head_file_path, objects_dir_path},
+    state::{Commit, Head, Index, Object, Repository, branch_path, resolve_head, staged_changes},
+    utils::{merge_head_file_path, trimmed_file_content},
 };
 
 pub struct Command;
@@ -31,28 +28,24 @@ impl std::fmt::Display for Output {
 impl commands::Command for Command {
     type Args = Args;
     type Output = Output;
-    fn execute(repository: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let staged_changes = staged_changes(&repository.root)?;
+    fn execute(repo: &Repository, args: Self::Args) -> Result<Self::Output> {
+        let staged_changes = staged_changes(&repo.root)?;
 
         if staged_changes.is_empty() {
             return Err(anyhow!("Commit not created: no changes"));
         }
-        if let Head::Detached { .. } = resolve_head(&repository.root)? {
+        let Head::Branch { hash, name } = resolve_head(&repo.root)? else {
             return Err(anyhow!("Commit not created: Detached HEAD"));
-        }
-
-        let index = Index::load(&repository.root)?;
-        let tree_hash = index.write_tree(&objects_dir_path(&repository.root))?;
-        let merge_head_path = merge_head_file_path(&repository.root);
-
-        let mut parent_hashes = if let Some(head_hash) = resolve_head_hash(&repository.root)? {
-            vec![head_hash]
-        } else {
-            Vec::new()
         };
 
+        let index = Index::load(&repo.root)?;
+        let tree_hash = index.store_tree(&repo.root)?;
+        let merge_head_path = merge_head_file_path(&repo.root);
+
+        let mut parent_hashes = hash.into_iter().collect::<Vec<String>>();
+
         if merge_head_path.exists() {
-            parent_hashes.push(fs::read_to_string(&merge_head_path)?);
+            parent_hashes.push(trimmed_file_content(&merge_head_path)?);
             fs::remove_file(merge_head_path)?;
         }
 
@@ -65,9 +58,9 @@ impl commands::Command for Command {
                 .as_secs(),
         });
 
-        let commit_hash = commit.store(&repository.root)?;
+        let commit_hash = commit.store(&repo.root)?;
 
-        fs::write(current_branch_path(&repository.root)?, &commit_hash)?;
+        fs::write(branch_path(&repo.root, &name), &commit_hash)?;
 
         Ok(Output { hash: commit_hash })
     }

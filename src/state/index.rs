@@ -11,7 +11,7 @@ use wincode::{SchemaRead, SchemaWrite};
 
 use crate::{
     state::{Object, Tree, TreeEntry, TreeEntryType},
-    utils::{index_file_path, objects_dir_path},
+    utils::index_file_path,
 };
 
 #[derive(SchemaRead, SchemaWrite, Serialize, Deserialize, Debug, Clone)]
@@ -47,44 +47,38 @@ impl Index {
         if self.entries.remove(path).is_some() {
             Ok(())
         } else {
-            Err(anyhow!("Unable to remove: file '{}' not in index", path.display()))
+            Err(anyhow!(
+                "Unable to remove: file '{}' not in index",
+                path.display()
+            ))
         }
     }
 
-    pub fn read_from_file(path: &Path) -> Result<Self> {
-        let file = OpenOptions::new().read(true).open(path)?;
+    pub fn load(root: &Path) -> Result<Self> {
+        let file = OpenOptions::new().read(true).open(index_file_path(root))?;
         let reader = BufReader::new(file);
         let index = serde_json::from_reader(reader).unwrap_or(Self::new());
 
         Ok(index)
     }
 
-    pub fn write_to_file(&self, path: &Path) -> Result<()> {
-        let file = OpenOptions::new().write(true).truncate(true).open(path)?;
+    pub fn store(&self, root: &Path) -> Result<()> {
+        let file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(index_file_path(root))?;
         let mut writer = BufWriter::new(file);
         serde_json::to_writer_pretty(&mut writer, &self)?;
 
         Ok(())
     }
 
-    pub fn load(root: &Path) -> Result<Self> {
-        Self::read_from_file(&index_file_path(root))
-    }
-
     pub fn load_from_commit(root: &Path, hash: &str) -> Result<Self> {
-        Self::read_from_commit(&objects_dir_path(root), hash)
-    }
-
-    pub fn store(&self, root: &Path) -> Result<()> {
-        self.write_to_file(&index_file_path(root))
-    }
-
-    pub fn read_from_commit(objects_dir: &Path, hash: &str) -> Result<Self> {
         let mut index = Self::new();
         let mut stack = Vec::new();
 
-        if let Object::Commit(commit) = Object::read(objects_dir, hash)? {
-            if let Object::Tree(tree) = Object::read(objects_dir, &commit.tree_hash)? {
+        if let Object::Commit(commit) = Object::load(root, hash)? {
+            if let Object::Tree(tree) = Object::load(root, &commit.tree_hash)? {
                 stack.push((tree, PathBuf::new()));
             }
 
@@ -102,9 +96,7 @@ impl Index {
                             );
                         }
                         TreeEntryType::Tree => {
-                            if let Object::Tree(subtree) =
-                                Object::read(objects_dir, &entry.object_hash)?
-                            {
+                            if let Object::Tree(subtree) = Object::load(root, &entry.object_hash)? {
                                 stack.push((subtree, path.join(entry.name)));
                             }
                         }
@@ -118,7 +110,7 @@ impl Index {
         }
     }
 
-    pub fn write_tree(&self, objects_dir: &Path) -> Result<String> {
+    pub fn store_tree(&self, root: &Path) -> Result<String> {
         let mut stack = Vec::<(String, Tree)>::new();
         stack.push((
             String::from("root"),
@@ -150,7 +142,7 @@ impl Index {
                 {
                     second_to_last.1.entries.push(TreeEntry {
                         object_type: TreeEntryType::Tree,
-                        object_hash: Object::Tree(last.1).write(objects_dir)?,
+                        object_hash: Object::Tree(last.1).store(root)?,
                         name: last.0,
                     });
                 }
@@ -180,14 +172,14 @@ impl Index {
             {
                 second_to_last.1.entries.push(TreeEntry {
                     object_type: TreeEntryType::Tree,
-                    object_hash: Object::Tree(last.1).write(objects_dir)?,
+                    object_hash: Object::Tree(last.1).store(root)?,
                     name: last.0,
                 });
             }
         }
 
         if let Some(last) = stack.pop() {
-            Ok(Object::Tree(last.1).write(objects_dir)?)
+            Ok(Object::Tree(last.1).store(root)?)
         } else {
             Err(anyhow!("Error at stack"))
         }

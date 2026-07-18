@@ -18,7 +18,7 @@ impl std::fmt::Display for Output {
         match &self.head {
             Head::Branch { name, .. } => {
                 write!(f, "{name} -> HEAD")?;
-                for branch in self.branches.iter().filter(|branch| branch != &name) {
+                for branch in self.branches.iter().filter(|b| b != &name) {
                     write!(f, "\n{branch}")?;
                 }
             }
@@ -38,11 +38,11 @@ impl commands::Command for Command {
     type Args = ();
     type Output = Output;
 
-    fn execute(repository: &Repository, (): ()) -> Result<Self::Output> {
+    fn execute(repo: &Repository, (): ()) -> Result<Self::Output> {
         let mut branches = Vec::new();
-        let head = resolve_head(&repository.root)?;
+        let head = resolve_head(&repo.root)?;
 
-        for entry in heads_dir_path(&repository.root).read_dir()?.flatten() {
+        for entry in heads_dir_path(&repo.root).read_dir()?.flatten() {
             let branch = entry
                 .file_name()
                 .into_string()

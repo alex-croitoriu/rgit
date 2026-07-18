@@ -36,10 +36,10 @@ impl commands::Command for Command {
     type Args = ();
     type Output = Output;
 
-    fn execute(repository: &Repository, (): ()) -> Result<Self::Output> {
-        let head = resolve_head(&repository.root)?;
-        let staged = staged_changes(&repository.root)?;
-        let unstaged = unstaged_changes(&repository.root)?;
+    fn execute(repo: &Repository, (): ()) -> Result<Self::Output> {
+        let head = resolve_head(&repo.root)?;
+        let staged = staged_changes(&repo.root)?;
+        let unstaged = unstaged_changes(&repo.root)?;
 
         Ok(Output {
             head,

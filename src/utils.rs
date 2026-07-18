@@ -1,4 +1,5 @@
 use std::{
+    fs,
     path::{Component, Path, PathBuf},
     time::SystemTime,
 };
@@ -29,6 +30,10 @@ pub fn file_mtime(path: &Path) -> Result<u64> {
 
 pub fn file_size(path: &Path) -> Result<u64> {
     Ok(path.metadata()?.len())
+}
+
+pub fn trimmed_file_content(path: &Path) -> Result<String> {
+    Ok(fs::read_to_string(path)?.trim().to_string())
 }
 
 pub fn objects_dir_path(root: &Path) -> PathBuf {
