@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Head, Repository, branch_path, resolve_head},
+    state::{Head, Repository, branch_path},
 };
 
 pub struct Command;
@@ -37,7 +37,7 @@ impl commands::Command for Command {
             ));
         }
 
-        if let Head::Branch { name, .. } = resolve_head(&repo.root)?
+        if let Head::Branch { name, .. } = Head::load(&repo.root)?
             && name == args.name
         {
             return Err(anyhow!(

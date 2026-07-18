@@ -10,8 +10,8 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Commit, Head, Index, Object, Repository, branch_path, resolve_head, staged_changes,
-        unstaged_changes, update_working_tree,
+        Commit, Head, Index, Object, Repository, branch_path, staged_changes, unstaged_changes,
+        update_working_tree,
     },
     utils::{merge_head_file_path, trimmed_file_content},
 };
@@ -44,7 +44,7 @@ impl commands::Command for Command {
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to merge: uncommited changes"));
         }
-        let Head::Branch { hash, name } = resolve_head(&repo.root)? else {
+        let Head::Branch { hash, name } = Head::load(&repo.root)? else {
             return Err(anyhow!("Unable to merge: Detached HEAD"));
         };
         let current_branch_path = branch_path(&repo.root, &name);

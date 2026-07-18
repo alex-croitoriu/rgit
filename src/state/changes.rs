@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::{
-    state::{Index, ignored_paths, resolve_head_hash},
+    state::{Head, Index, ignored_paths},
     utils::{file_mtime, file_size},
 };
 
@@ -46,7 +46,7 @@ pub fn staged_changes(root: &Path) -> Result<Changes> {
     let mut diff = Changes::default();
 
     let current_index = Index::load(root)?;
-    let head_index = if let Some(head_hash) = resolve_head_hash(root)? {
+    let head_index = if let Some(head_hash) = Head::load(root)?.hash() {
         Index::load_from_commit(root, &head_hash)?
     } else {
         Index::new()

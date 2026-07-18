@@ -2,7 +2,9 @@ use anyhow::Result;
 
 use crate::{
     args::{BranchSubcommands, Commands},
-    commands::*,
+    commands::{
+        Command, StatelessCommand, add, branch, commit, diff, init, log, merge, rm, status, switch,
+    },
     state::Repository,
 };
 

@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Repository, branch_path, resolve_head_hash},
+    state::{Head, Repository, branch_path},
 };
 
 pub struct Command;
@@ -37,7 +37,10 @@ impl commands::Command for Command {
             ));
         }
 
-        if let Some(hash) = resolve_head_hash(&repo.root)? {
+        if let Some(hash) = Head::load(&repo.root)?.hash() {
+            if let Some(parent) = branch_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
             fs::write(branch_path, hash)?;
         } else {
             return Err(anyhow!("Branch not created: no commits on HEAD yet"));

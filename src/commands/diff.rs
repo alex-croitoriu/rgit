@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Diff, Index, Repository, branch_path, diff_indexes, resolve_head_hash},
+    state::{Diff, Head, Index, Repository, branch_path, diff_indexes},
     utils::trimmed_file_content,
 };
 
@@ -28,7 +28,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repo: &Repository, args: Self::Args) -> Result<Self::Output> {
-        let head_index = if let Some(hash) = resolve_head_hash(&repo.root)? {
+        let head_index = if let Some(hash) = Head::load(&repo.root)?.hash() {
             Index::load_from_commit(&repo.root, &hash)?
         } else {
             Index::new()

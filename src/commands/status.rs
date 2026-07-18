@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::{
     commands,
-    state::{Changes, Head, Repository, resolve_head, staged_changes, unstaged_changes},
+    state::{Changes, Head, Repository, staged_changes, unstaged_changes},
 };
 
 pub struct Command;
@@ -37,7 +37,7 @@ impl commands::Command for Command {
     type Output = Output;
 
     fn execute(repo: &Repository, (): ()) -> Result<Self::Output> {
-        let head = resolve_head(&repo.root)?;
+        let head = Head::load(&repo.root)?;
         let staged = staged_changes(&repo.root)?;
         let unstaged = unstaged_changes(&repo.root)?;
 

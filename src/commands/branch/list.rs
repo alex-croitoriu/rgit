@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Head, Repository, resolve_head},
+    state::{Head, Repository},
     utils::heads_dir_path,
 };
 
@@ -40,7 +40,7 @@ impl commands::Command for Command {
 
     fn execute(repo: &Repository, (): ()) -> Result<Self::Output> {
         let mut branches = Vec::new();
-        let head = resolve_head(&repo.root)?;
+        let head = Head::load(&repo.root)?;
 
         for entry in heads_dir_path(&repo.root).read_dir()?.flatten() {
             let branch = entry

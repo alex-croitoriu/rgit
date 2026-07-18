@@ -3,8 +3,8 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Head, Index, Object, Repository, branch_path, resolve_head, staged_changes,
-        unstaged_changes, update_head, update_working_tree,
+        Head, Index, Object, Repository, branch_path, staged_changes, unstaged_changes,
+        update_working_tree,
     },
     utils::trimmed_file_content,
 };
@@ -41,7 +41,7 @@ impl commands::Command for Command {
             return Err(anyhow!("Unable to switch: uncommited changes"));
         }
 
-        if let Head::Branch { name, .. } = resolve_head(&repo.root)?
+        if let Head::Branch { name, .. } = Head::load(&repo.root)?
             && name == args.target
         {
             return Err(anyhow!("Unable to switch: already on '{}'", args.target));
@@ -57,6 +57,7 @@ impl commands::Command for Command {
                 name: args.target.clone(),
                 hash: Some(target_hash.clone()),
             };
+            // TODO: make this lazy
         } else if let Ok(Object::Commit(_)) = Object::load(&repo.root, &args.target) {
             target_hash = args.target.clone();
             target_head = Head::Detached {
@@ -75,7 +76,7 @@ impl commands::Command for Command {
         update_working_tree(&repo.root, &mut target_index, &current_index)?;
         target_index.store(&repo.root)?;
 
-        update_head(&repo.root, &target_head)?;
+        target_head.store(&repo.root)?;
 
         Ok(Output { head: target_head })
     }
