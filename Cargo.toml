@@ -8,8 +8,6 @@ anyhow = { version = "1.0.100", features = ["backtrace"] }
 clap = { version = "4.5.53", features = ["derive"] }
 sha1 = "0.10.6"
 flate2 = { version = "1.0.17", features = ["zlib-rs"], default-features = false }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.148", features = ["preserve_order"] }
 similar = "2.7.0"
 wincode = { version = "0.5.5", features = ["derive"] }
 chrono = "0.4.45"

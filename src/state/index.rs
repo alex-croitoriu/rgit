@@ -1,44 +1,60 @@
 use std::{
     collections::BTreeMap,
-    fs::OpenOptions,
-    io::{BufReader, BufWriter},
+    fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
 use wincode::{SchemaRead, SchemaWrite};
 
 use crate::{
     state::{Object, Tree, TreeEntry, TreeEntryType},
-    utils::index_file_path,
+    utils::{file_size, index_file_path},
 };
 
-#[derive(SchemaRead, SchemaWrite, Serialize, Deserialize, Debug, Clone)]
+#[derive(SchemaRead, SchemaWrite, Debug, Clone)]
 pub struct IndexEntry {
     pub hash: String,
     pub size: u64,
     pub mtime: u64,
 }
 
-// #[derive(SchemaRead, SchemaWrite, Deserialize, Debug, Clone)]
-// pub struct SerializableIndex {
-//     pub entries: BTreeMap<String, IndexEntry>
-// }
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Index {
     pub entries: BTreeMap<PathBuf, IndexEntry>,
 }
 
-// TODO: replace json serialization with a better alternative (maybe wincode)
-impl Index {
-    pub fn new() -> Self {
-        Self {
-            entries: BTreeMap::new(),
+#[derive(SchemaRead, SchemaWrite, Debug, Clone)]
+pub struct SerializableIndex {
+    entries: BTreeMap<String, IndexEntry>,
+}
+
+impl From<Index> for SerializableIndex {
+    fn from(value: Index) -> Self {
+        SerializableIndex {
+            entries: value
+                .entries
+                .into_iter()
+                // TODO: handle string conversion errors
+                .map(|(p, e)| (p.to_string_lossy().to_string(), e))
+                .collect(),
         }
     }
+}
 
+impl From<SerializableIndex> for Index {
+    fn from(value: SerializableIndex) -> Self {
+        Self {
+            entries: value
+                .entries
+                .into_iter()
+                .map(|(p, e)| (PathBuf::from(p), e))
+                .collect(),
+        }
+    }
+}
+
+impl Index {
     pub fn add(&mut self, name: &Path, entry: IndexEntry) {
         self.entries.insert(name.to_path_buf(), entry);
     }
@@ -55,26 +71,27 @@ impl Index {
     }
 
     pub fn load(root: &Path) -> Result<Self> {
-        let file = OpenOptions::new().read(true).open(index_file_path(root))?;
-        let reader = BufReader::new(file);
-        let index = serde_json::from_reader(reader).unwrap_or(Self::new());
+        let index_file_path = index_file_path(root);
 
-        Ok(index)
+        if file_size(&index_file_path)? == 0 {
+            Ok(Self::default())
+        } else {
+            Ok(Self::from(
+                wincode::deserialize::<SerializableIndex>(&fs::read(index_file_path)?)
+                    .map_err(|_| anyhow!("Corrupt index file"))?,
+            ))
+        }
     }
 
     pub fn store(&self, root: &Path) -> Result<()> {
-        let file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(index_file_path(root))?;
-        let mut writer = BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut writer, &self)?;
-
-        Ok(())
+        Ok(fs::write(
+            index_file_path(root),
+            wincode::serialize(&SerializableIndex::from(self.clone()))?,
+        )?)
     }
 
     pub fn load_from_commit(root: &Path, hash: &str) -> Result<Self> {
-        let mut index = Self::new();
+        let mut index = Self::default();
         let mut stack = Vec::new();
 
         if let Object::Commit(commit) = Object::load(root, hash)? {
@@ -119,8 +136,7 @@ impl Index {
             },
         ));
 
-        for (name, entry) in &self.entries {
-            let path = PathBuf::from(name);
+        for (path, entry) in &self.entries {
             let components = path
                 .components()
                 .filter_map(|c| c.as_os_str().to_str())
