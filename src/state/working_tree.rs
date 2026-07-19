@@ -35,7 +35,11 @@ pub fn update_working_tree(root: &Path, new_index: &mut Index, old_index: &Index
     }
 
     for (path, new_entry) in &mut new_index.entries {
-        if let Some(old_entry) = old_index.entries.get(path) && new_entry.hash == old_entry.hash {
+        if let Some(old_entry) = old_index.entries.get(path)
+            && new_entry.hash == old_entry.hash
+        {
+            new_entry.mtime = old_entry.mtime;
+            new_entry.size = old_entry.size;
             continue;
         }
 
