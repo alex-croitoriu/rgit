@@ -4,8 +4,8 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Commit, Head, Index, Object, Repository, branch_path, staged_changes},
-    utils::{merge_head_file_path, trimmed_file_content},
+    state::{Commit, Head, Index, Object, Repository, staged_changes},
+    utils::{branch_path, merge_head_file_path, trimmed_file_content},
 };
 
 pub struct Command;

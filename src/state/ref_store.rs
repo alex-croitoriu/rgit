@@ -1,13 +1,10 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use anyhow::{Result, anyhow};
 
 use crate::{
     state::Object,
-    utils::{head_file_path, heads_dir_path, trimmed_file_content},
+    utils::{head_file_path, trimmed_file_content},
 };
 
 pub enum Head {
@@ -62,8 +59,4 @@ impl Head {
 
         Ok(())
     }
-}
-
-pub fn branch_path(root: &Path, name: &str) -> PathBuf {
-    heads_dir_path(root).join(name)
 }

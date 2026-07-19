@@ -2,8 +2,8 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Diff, Head, Index, Repository, branch_path, diff_indexes},
-    utils::trimmed_file_content,
+    state::{Diff, Head, Index, Repository, diff_indexes},
+    utils::{branch_path, trimmed_file_content},
 };
 
 pub struct Command;
@@ -31,7 +31,7 @@ impl commands::Command for Command {
         let head_index = if let Some(hash) = Head::load(&repo.root)?.hash() {
             Index::load_from_commit(&repo.root, &hash)?
         } else {
-            Index::new()
+            Index::default()
         };
 
         if let Some(target) = &args.target {

@@ -10,6 +10,6 @@ pub use changes::{Changes, staged_changes, unstaged_changes};
 pub use diff::{Diff, diff_indexes};
 pub use index::{Index, IndexEntry};
 pub use object_store::{Blob, Commit, Object, Tree, TreeEntry, TreeEntryType};
-pub use ref_store::{Head, branch_path};
+pub use ref_store::Head;
 pub use repository::Repository;
 pub use working_tree::{ignored_paths, update_working_tree};

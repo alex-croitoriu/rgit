@@ -10,10 +10,10 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Commit, Head, Index, Object, Repository, branch_path, staged_changes, unstaged_changes,
+        Commit, Head, Index, Object, Repository, staged_changes, unstaged_changes,
         update_working_tree,
     },
-    utils::{merge_head_file_path, trimmed_file_content},
+    utils::{branch_path, merge_head_file_path, trimmed_file_content},
 };
 
 pub struct Command;
@@ -184,7 +184,7 @@ fn find_common_ancestor(repo: &Repository, hash1: &str, hash2: &str) -> Result<S
 }
 
 fn three_way_merge(base: &Index, head: &Index, target: &Index) -> (Index, Vec<PathBuf>) {
-    let mut merged = Index::new();
+    let mut merged = Index::default();
     let mut conflicts = Vec::new();
 
     let mut all_paths = HashSet::new();

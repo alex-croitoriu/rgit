@@ -4,7 +4,8 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Head, Repository, branch_path},
+    state::{Head, Repository},
+    utils::branch_path,
 };
 
 pub struct Command;

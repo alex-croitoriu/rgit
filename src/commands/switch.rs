@@ -3,10 +3,9 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Head, Index, Object, Repository, branch_path, staged_changes, unstaged_changes,
-        update_working_tree,
+        Head, Index, Object, Repository, staged_changes, unstaged_changes, update_working_tree,
     },
-    utils::trimmed_file_content,
+    utils::{branch_path, trimmed_file_content},
 };
 
 pub struct Command;

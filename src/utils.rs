@@ -38,7 +38,7 @@ pub fn trimmed_file_content(path: &Path) -> Result<String> {
 }
 
 pub fn date_from_timestamp(timestamp: u64) -> String {
-    if let Some(timestamp) = DateTime::from_timestamp_secs(timestamp as i64) {
+    if let Some(timestamp) = DateTime::from_timestamp_secs(timestamp.cast_signed()) {
         timestamp.with_timezone(&Local).to_string()
     } else {
         String::from("Invalid timestamp")
@@ -63,4 +63,8 @@ pub fn head_file_path(root: &Path) -> PathBuf {
 
 pub fn merge_head_file_path(root: &Path) -> PathBuf {
     root.join(".rgit/MERGE_HEAD")
+}
+
+pub fn branch_path(root: &Path, name: &str) -> PathBuf {
+    heads_dir_path(root).join(name)
 }
