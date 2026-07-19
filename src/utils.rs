@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
+use chrono::{DateTime, Local};
 
 pub fn normalize_path(path: &Path) -> PathBuf {
     let mut result = PathBuf::new();
@@ -34,6 +35,14 @@ pub fn file_size(path: &Path) -> Result<u64> {
 
 pub fn trimmed_file_content(path: &Path) -> Result<String> {
     Ok(fs::read_to_string(path)?.trim().to_string())
+}
+
+pub fn date_from_timestamp(timestamp: u64) -> String {
+    if let Some(timestamp) = DateTime::from_timestamp_secs(timestamp as i64) {
+        timestamp.with_timezone(&Local).to_string()
+    } else {
+        String::from("Invalid timestamp")
+    }
 }
 
 pub fn objects_dir_path(root: &Path) -> PathBuf {

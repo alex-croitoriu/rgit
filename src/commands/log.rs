@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{Head, Object, Repository},
-    utils::{heads_dir_path, trimmed_file_content},
+    utils::{date_from_timestamp, heads_dir_path, trimmed_file_content},
 };
 
 pub struct Command;
@@ -48,19 +48,29 @@ impl std::fmt::Display for Output {
             }
         }
 
-        writeln!(f, "{:<10} {}", "Date:", commit.timestamp)?;
-        writeln!(f, "{:<10} {}", "Message:", commit.message)?;
+        writeln!(
+            f,
+            "{:<10} {}",
+            "Date:",
+            date_from_timestamp(commit.timestamp)
+        )?;
+        write!(f, "{:<10} {}", "Message:", commit.message)?;
 
         for commit in self.commits.iter().skip(1) {
-            writeln!(f)?;
+            write!(f, "\n\n")?;
             if let Some(branches) = &commit.branches {
                 writeln!(f, "{} ({})", commit.hash, branches.join(", "))?;
             } else {
                 writeln!(f, "{}", commit.hash)?;
             }
 
-            writeln!(f, "{:<10} {}", "Date:", commit.timestamp)?;
-            writeln!(f, "{:<10} {}", "Message:", commit.message)?;
+            writeln!(
+                f,
+                "{:<10} {}",
+                "Date:",
+                date_from_timestamp(commit.timestamp)
+            )?;
+            write!(f, "{:<10} {}", "Message:", commit.message)?;
         }
 
         Ok(())
@@ -111,7 +121,6 @@ impl commands::Command for Command {
         let head = Head::load(&repo.root)?;
 
         let mut queue = head.hash().into_iter().collect::<VecDeque<String>>();
-
         let mut visited = HashSet::new();
 
         while let Some(hash) = queue.pop_front() {
