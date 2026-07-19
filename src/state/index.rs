@@ -25,7 +25,7 @@ pub struct Index {
 }
 
 #[derive(SchemaRead, SchemaWrite, Debug, Clone)]
-pub struct SerializableIndex {
+struct SerializableIndex {
     entries: BTreeMap<String, IndexEntry>,
 }
 

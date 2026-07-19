@@ -9,9 +9,9 @@ use crate::{
 
 #[derive(Default)]
 pub struct Changes {
-    pub added: Vec<PathBuf>,
-    pub deleted: Vec<PathBuf>,
-    pub modified: Vec<PathBuf>,
+    added: Vec<PathBuf>,
+    deleted: Vec<PathBuf>,
+    modified: Vec<PathBuf>,
 }
 
 impl Changes {

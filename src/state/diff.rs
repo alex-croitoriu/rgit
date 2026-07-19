@@ -8,16 +8,16 @@ use similar::ChangeTag;
 
 use crate::state::{Index, Object};
 
-pub struct DiffEntry {
-    pub path: PathBuf,
-    pub change: String,
+struct DiffEntry {
+    path: PathBuf,
+    change: String,
 }
 
 #[derive(Default)]
 pub struct Diff {
-    pub added: Vec<DiffEntry>,
-    pub deleted: Vec<DiffEntry>,
-    pub modified: Vec<DiffEntry>,
+    added: Vec<DiffEntry>,
+    deleted: Vec<DiffEntry>,
+    modified: Vec<DiffEntry>,
 }
 
 impl std::fmt::Display for Diff {

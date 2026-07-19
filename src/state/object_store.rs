@@ -46,15 +46,15 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn serialize(&self) -> Result<Vec<u8>> {
+    fn serialize(&self) -> Result<Vec<u8>> {
         Ok(wincode::serialize(self)?)
     }
 
-    pub fn deserialize(data: &[u8]) -> Result<Self> {
+    fn deserialize(data: &[u8]) -> Result<Self> {
         Ok(wincode::deserialize(data)?)
     }
 
-    pub fn hash(&self) -> Result<String> {
+    fn hash(&self) -> Result<String> {
         use std::fmt::Write;
 
         let mut hasher = Sha1::new();
@@ -68,14 +68,14 @@ impl Object {
         Ok(digest)
     }
 
-    pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
+    fn compress(data: &[u8]) -> Result<Vec<u8>> {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(data)?;
 
         Ok(encoder.finish()?)
     }
 
-    pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
+    fn decompress(data: &[u8]) -> Result<Vec<u8>> {
         let mut decoder = ZlibDecoder::new(data);
         let mut decompressed = Vec::new();
         decoder.read_to_end(&mut decompressed)?;
