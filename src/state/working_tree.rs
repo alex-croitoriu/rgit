@@ -29,7 +29,20 @@ pub fn update_working_tree(root: &Path, new_index: &mut Index, old_index: &Index
         if !new_index.entries.contains_key(path) {
             let absolute_path = root.join(path);
             if absolute_path.exists() {
-                fs::remove_file(absolute_path)?;
+                fs::remove_file(&absolute_path)?;
+                if let Some(parent) = absolute_path.parent() {
+                    for ancestor in parent.ancestors() {
+                        if ancestor == root || !ancestor.starts_with(root) {
+                            break;
+                        }
+                        if ancestor.read_dir()?.next().is_none() {
+                            fs::remove_dir(ancestor)?;
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
