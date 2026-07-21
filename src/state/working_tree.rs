@@ -17,7 +17,9 @@ pub fn ignored_paths(root: &Path) -> Vec<PathBuf> {
         let reader = BufReader::new(file);
 
         for line in reader.lines().map_while(Result::ok) {
-            ignored.push(normalize_path(&PathBuf::from(line)));
+            if !line.trim().is_empty() {
+                ignored.push(normalize_path(&PathBuf::from(line)));
+            }
         }
     }
 
