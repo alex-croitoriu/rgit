@@ -12,21 +12,21 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize an empty repository
+    /// Initialize empty repository
     Init,
-    /// Show the working tree status
+    /// Show working tree status
     Status,
-    /// Add file contents to the index
+    /// Add file contents to index
     Add(add::Args),
-    /// Remove file contents from the index
+    /// Remove file contents from index
     Rm(rm::Args),
-    /// Record changes to the repository
+    /// Record changes to repository
     Commit(commit::Args),
     /// Show commit history
     Log,
-    /// Show changes between the index and the last commit or between the index and a branch
+    /// Show changes between index and last commit or index and target
     Diff(diff::Args),
-    /// Switch to another branch
+    /// Switch to target
     Switch(switch::Args),
     /// List, create or delete branches
     #[command(subcommand)]

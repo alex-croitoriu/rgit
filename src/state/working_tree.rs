@@ -37,8 +37,7 @@ pub fn update_working_tree(root: &Path, new_index: &mut Index, old_index: &Index
                         }
                         if ancestor.read_dir()?.next().is_none() {
                             fs::remove_dir(ancestor)?;
-                        }
-                        else {
+                        } else {
                             break;
                         }
                     }

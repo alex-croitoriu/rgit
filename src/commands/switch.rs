@@ -13,6 +13,9 @@ pub struct Command;
 #[derive(clap::Args)]
 pub struct Args {
     target: String,
+    /// Discard all changes and switch
+    #[arg(short, long)]
+    force: bool,
 }
 
 pub struct Output {
@@ -36,7 +39,7 @@ impl commands::Command for Command {
         let staged_changes = staged_changes(&repo.root)?;
         let unstaged_changes = unstaged_changes(&repo.root)?;
 
-        if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
+        if !(staged_changes.is_empty() && unstaged_changes.is_empty()) && !args.force {
             return Err(anyhow!("Unable to switch: uncommited changes"));
         }
 
