@@ -13,6 +13,9 @@ pub struct Command;
 #[derive(clap::Args)]
 pub struct Args {
     message: String,
+    /// Allow commit with no changes
+    #[arg(short, long)]
+    allow_empty: bool,
 }
 
 pub struct Output {
@@ -31,7 +34,7 @@ impl commands::Command for Command {
     fn execute(repo: &Repository, args: Self::Args) -> Result<Self::Output> {
         let staged_changes = staged_changes(&repo.root)?;
 
-        if staged_changes.is_empty() {
+        if staged_changes.is_empty() && !args.allow_empty {
             return Err(anyhow!("Commit not created: no changes"));
         }
         let Head::Branch { hash, name } = Head::load(&repo.root)? else {
