@@ -17,7 +17,7 @@ impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.head {
             Head::Branch { name, .. } => write!(f, "On branch: {name}")?,
-            Head::Detached { hash } => write!(f, "Detached HEAD: {hash}")?,
+            Head::Commit { hash } => write!(f, "Detached HEAD: {hash}")?,
         }
         if !self.staged.is_empty() {
             write!(f, "\n\nStaged changes:")?;

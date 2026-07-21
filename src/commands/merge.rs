@@ -10,10 +10,10 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Commit, Head, Index, Object, Repository, staged_changes, unstaged_changes,
+        Commit, Head, Index, Object, Repository, Target, staged_changes, unstaged_changes,
         update_working_tree,
     },
-    utils::{branch_path, merge_head_file_path, trimmed_file_content},
+    utils::merge_head_file_path,
 };
 
 pub struct Command;
@@ -44,31 +44,21 @@ impl commands::Command for Command {
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
             return Err(anyhow!("Unable to merge: uncommited changes"));
         }
-        let Head::Branch { hash, name } = Head::load(&repo.root)? else {
-            return Err(anyhow!("Unable to merge: Detached HEAD"));
-        };
-        let current_branch_path = branch_path(&repo.root, &name);
+        let mut head = Head::load(&repo.root)?;
 
-        let Some(head_hash) = hash else {
-            return Err(anyhow!("Unable to merge: no commits on HEAD yet"));
+        let Some(head_hash) = head.hash() else {
+            return Err(anyhow!("Unable to merge: no commits yet"));
         };
 
-        let target_path = branch_path(&repo.root, &args.target);
-
-        if !target_path.exists() {
-            return Err(anyhow!(
-                "Unable to merge: branch '{}' does not exist",
-                args.target
-            ));
-        }
-        let target_hash = trimmed_file_content(&target_path)?;
+        let target = Target::resolve(&repo.root, &args.target)
+            .map_err(|e| anyhow!("Unable to switch: {e}"))?;
+        let target_hash = target.hash();
 
         if is_ancestor(repo, &target_hash, &head_hash)? {
             return Err(anyhow!("Unable to merge: already up to date"));
         }
-
         if is_ancestor(repo, &head_hash, &target_hash)? {
-            fs::write(current_branch_path, &target_hash)?;
+            head.advance(&repo.root, &target_hash)?;
 
             let mut target_index = Index::load_from_commit(&repo.root, &target_hash)?;
             let current_index = Index::load(&repo.root)?;
@@ -118,7 +108,7 @@ impl commands::Command for Command {
         };
 
         let commit_hash = Object::Commit(commit).store(&repo.root)?;
-        fs::write(current_branch_path, &commit_hash)?;
+        head.advance(&repo.root, &commit_hash)?;
 
         update_working_tree(&repo.root, &mut merged_index, &head_index)?;
         merged_index.store(&repo.root)?;

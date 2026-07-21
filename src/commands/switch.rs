@@ -3,9 +3,8 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{
-        Head, Index, Object, Repository, staged_changes, unstaged_changes, update_working_tree,
+        Head, Index, Repository, Target, staged_changes, unstaged_changes, update_working_tree,
     },
-    utils::{branch_path, trimmed_file_content},
 };
 
 pub struct Command;
@@ -19,14 +18,14 @@ pub struct Args {
 }
 
 pub struct Output {
-    head: Head,
+    target: Target,
 }
 
 impl std::fmt::Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.head {
-            Head::Branch { name, .. } => write!(f, "Switched to branch: {name}"),
-            Head::Detached { hash } => write!(f, "Switched to commit: {hash}"),
+        match &self.target {
+            Target::Branch { name, .. } => write!(f, "Switched to branch: {name}"),
+            Target::Commit { hash } => write!(f, "Switched to commit: {hash}"),
         }
     }
 }
@@ -39,47 +38,46 @@ impl commands::Command for Command {
         let staged_changes = staged_changes(&repo.root)?;
         let unstaged_changes = unstaged_changes(&repo.root)?;
 
-        if !(staged_changes.is_empty() && unstaged_changes.is_empty()) && !args.force {
+        if (staged_changes.is_empty() || unstaged_changes.is_empty()) && !args.force {
             return Err(anyhow!("Unable to switch: uncommited changes"));
         }
 
-        if let Head::Branch { name, .. } = Head::load(&repo.root)?
-            && name == args.target
-        {
-            return Err(anyhow!("Unable to switch: already on '{}'", args.target));
+        match Head::load(&repo.root)? {
+            Head::Branch { name, .. } => {
+                if name == args.target {
+                    return Err(anyhow!(
+                        "Unable to switch: already on branch '{}'",
+                        args.target
+                    ));
+                }
+            }
+            Head::Commit { hash } => {
+                if hash == args.target {
+                    return Err(anyhow!(
+                        "Unable to switch: already on commit {}",
+                        args.target
+                    ));
+                }
+                // TODO: handle this (or not)
+                // if !args.force {
+                //     return Err(anyhow!(
+                //         "Unable to switch: commit {hash} will remain unreachable\nYou can create a new branch or use the --force option"
+                //     ));
+                // }
+            }
         }
 
-        let target_branch_path = branch_path(&repo.root, &args.target);
-        let target_hash;
-        let target_head;
-
-        if target_branch_path.exists() {
-            target_hash = trimmed_file_content(&target_branch_path)?;
-            target_head = Head::Branch {
-                name: args.target.clone(),
-                hash: Some(target_hash.clone()),
-            };
-            // TODO: make this lazy
-        } else if let Ok(Object::Commit(_)) = Object::load(&repo.root, &args.target) {
-            target_hash = args.target.clone();
-            target_head = Head::Detached {
-                hash: args.target.clone(),
-            };
-        } else {
-            return Err(anyhow!(
-                "Unable to switch: target '{}' is invalid",
-                args.target
-            ));
-        }
+        let target = Target::resolve(&repo.root, &args.target)
+            .map_err(|e| anyhow!("Unable to switch: {e}"))?;
 
         let current_index = Index::load(&repo.root)?;
-        let mut target_index = Index::load_from_commit(&repo.root, &target_hash)?;
+        let mut target_index = Index::load_from_commit(&repo.root, &target.hash())?;
 
         update_working_tree(&repo.root, &mut target_index, &current_index)?;
         target_index.store(&repo.root)?;
 
-        target_head.store(&repo.root)?;
+        Head::update(&repo.root, &target)?;
 
-        Ok(Output { head: target_head })
+        Ok(Output { target })
     }
 }

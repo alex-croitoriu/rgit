@@ -2,8 +2,7 @@ use anyhow::{Result, anyhow};
 
 use crate::{
     commands,
-    state::{Diff, Head, Index, Repository, diff_indexes},
-    utils::{branch_path, trimmed_file_content},
+    state::{Diff, Head, Index, Repository, Target, diff_indexes},
 };
 
 pub struct Command;
@@ -35,15 +34,9 @@ impl commands::Command for Command {
         };
 
         if let Some(target) = &args.target {
-            let branch_path = branch_path(&repo.root, target);
-            if !branch_path.exists() {
-                return Err(anyhow!("Branch does not exist: '{target}'"));
-            }
-
-            let branch_hash = trimmed_file_content(&branch_path)?;
-            let branch_index = Index::load_from_commit(&repo.root, &branch_hash)?;
-
-            let diff = diff_indexes(&repo.root, &head_index, &branch_index)?;
+            let target = Target::resolve(&repo.root, target).map_err(|e| anyhow!("Failed: {e}"))?;
+            let target_index = Index::load_from_commit(&repo.root, &target.hash())?;
+            let diff = diff_indexes(&repo.root, &head_index, &target_index)?;
 
             Ok(Output { diff })
         } else {

@@ -22,7 +22,7 @@ impl std::fmt::Display for Output {
                     write!(f, "\n{branch}")?;
                 }
             }
-            Head::Detached { hash } => {
+            Head::Commit { hash } => {
                 write!(f, "Detached HEAD -> {hash}")?;
                 for branch in &self.branches {
                     write!(f, "\n{branch}")?;

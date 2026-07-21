@@ -22,6 +22,7 @@ pub struct Diff {
 
 impl std::fmt::Display for Diff {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: fix newlines
         for entry in &self.added {
             writeln!(f, "{:<11}{}", "Added:", entry.path.display())?;
             writeln!(f, "{}", entry.change)?;
@@ -63,7 +64,12 @@ pub fn diff_indexes(root: &Path, from: &Index, to: &Index) -> Result<Diff> {
         } else {
             let change =
                 if let Some(from_content) = Object::load(root, &from_entry.hash)?.blob_text()? {
-                    diff_text(&from_content, "")?
+                    let diff_text = diff_text(&from_content, ";")?;
+                    if diff_text.is_empty() {
+                        String::from("Empty file")
+                    } else {
+                        diff_text
+                    }
                 } else {
                     String::from("Binary file")
                 };
@@ -79,7 +85,12 @@ pub fn diff_indexes(root: &Path, from: &Index, to: &Index) -> Result<Diff> {
         if !from.entries.contains_key(name) {
             let change =
                 if let Some(to_content) = Object::load(root, &to_entry.hash)?.blob_text()? {
-                    diff_text("", &to_content)?
+                    let diff_text = diff_text("", &to_content)?;
+                    if diff_text.is_empty() {
+                        String::from("Empty file")
+                    } else {
+                        diff_text
+                    }
                 } else {
                     String::from("Binary file")
                 };

@@ -44,7 +44,7 @@ impl commands::Command for Command {
             }
             fs::write(branch_path, hash)?;
         } else {
-            return Err(anyhow!("Branch not created: no commits on HEAD yet"));
+            return Err(anyhow!("Branch not created: no commits yet"));
         }
 
         Ok(Output { name: args.name })

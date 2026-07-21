@@ -35,7 +35,7 @@ impl std::fmt::Display for Output {
                         .join(", ")
                 )?;
             }
-            Head::Detached { .. } => {
+            Head::Commit { .. } => {
                 writeln!(
                     f,
                     "{} ({})",

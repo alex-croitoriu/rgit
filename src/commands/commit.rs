@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 use crate::{
     commands,
     state::{Commit, Head, Index, Object, Repository, staged_changes},
-    utils::{branch_path, merge_head_file_path, trimmed_file_content},
+    utils::{merge_head_file_path, trimmed_file_content},
 };
 
 pub struct Command;
@@ -37,15 +37,15 @@ impl commands::Command for Command {
         if staged_changes.is_empty() && !args.allow_empty {
             return Err(anyhow!("Commit not created: no changes"));
         }
-        let Head::Branch { hash, name } = Head::load(&repo.root)? else {
-            return Err(anyhow!("Commit not created: Detached HEAD"));
-        };
+
+        let mut head = Head::load(&repo.root)?;
+        let head_hash = head.hash();
 
         let index = Index::load(&repo.root)?;
         let tree_hash = index.store_tree(&repo.root)?;
         let merge_head_path = merge_head_file_path(&repo.root);
 
-        let mut parent_hashes = hash.into_iter().collect::<Vec<String>>();
+        let mut parent_hashes = head_hash.into_iter().collect::<Vec<String>>();
 
         if merge_head_path.exists() {
             parent_hashes.push(trimmed_file_content(&merge_head_path)?);
@@ -62,8 +62,7 @@ impl commands::Command for Command {
         });
 
         let commit_hash = commit.store(&repo.root)?;
-
-        fs::write(branch_path(&repo.root, &name), &commit_hash)?;
+        head.advance(&repo.root, &commit_hash)?;
 
         Ok(Output { hash: commit_hash })
     }
