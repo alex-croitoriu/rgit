@@ -42,7 +42,7 @@ impl commands::Command for Command {
         let unstaged_changes = unstaged_changes(&repo.root)?;
 
         if !staged_changes.is_empty() || !unstaged_changes.is_empty() {
-            return Err(anyhow!("Unable to merge: uncommited changes"));
+            return Err(anyhow!("Unable to merge: uncommitted changes"));
         }
         let mut head = Head::load(&repo.root)?;
 
@@ -51,7 +51,7 @@ impl commands::Command for Command {
         };
 
         let target = Target::resolve(&repo.root, &args.target)
-            .map_err(|e| anyhow!("Unable to switch: {e}"))?;
+            .map_err(|e| anyhow!("Unable to merge: {e}"))?;
         let target_hash = target.hash();
 
         if is_ancestor(repo, &target_hash, &head_hash)? {
