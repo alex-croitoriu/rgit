@@ -64,7 +64,7 @@ pub fn diff_indexes(root: &Path, from: &Index, to: &Index) -> Result<Diff> {
         } else {
             let change =
                 if let Some(from_content) = Object::load(root, &from_entry.hash)?.blob_text()? {
-                    let diff_text = diff_text(&from_content, ";")?;
+                    let diff_text = diff_text(&from_content, "")?;
                     if diff_text.is_empty() {
                         String::from("Empty file")
                     } else {
