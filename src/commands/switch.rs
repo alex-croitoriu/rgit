@@ -1,9 +1,8 @@
 use anyhow::{Result, anyhow};
 
 use crate::{
-    commands,
-    state::{
-        Head, Index, Repository, Target, staged_changes, unstaged_changes, update_working_tree,
+    commands, state::{
+        Head, Index, Object, Repository, Target, staged_changes, unstaged_changes, update_working_tree,
     },
 };
 
@@ -38,8 +37,8 @@ impl commands::Command for Command {
         let staged_changes = staged_changes(&repo.root)?;
         let unstaged_changes = unstaged_changes(&repo.root)?;
 
-        if (staged_changes.is_empty() || unstaged_changes.is_empty()) && !args.force {
-            return Err(anyhow!("Unable to switch: uncommited changes"));
+        if (!staged_changes.is_empty() || !unstaged_changes.is_empty()) && !args.force {
+            return Err(anyhow!("Unable to switch: uncommitted changes"));
         }
 
         match Head::load(&repo.root)? {
@@ -58,12 +57,11 @@ impl commands::Command for Command {
                         args.target
                     ));
                 }
-                // TODO: handle this (or not)
-                // if !args.force {
-                //     return Err(anyhow!(
-                //         "Unable to switch: commit {hash} will remain unreachable\nYou can create a new branch or use the --force option"
-                //     ));
-                // }
+                if !Object::is_commit_reachable(&repo.root, &hash)? && !args.force {
+                    return Err(anyhow!(
+                        "Unable to switch: commit {hash} will remain unreachable\nYou can create a new branch or use the --force option"
+                    ));
+                }
             }
         }
 

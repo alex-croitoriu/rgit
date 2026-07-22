@@ -1,11 +1,16 @@
-use std::{fs, io::prelude::*, path::Path};
+use std::{
+    collections::{HashSet, VecDeque},
+    fs,
+    io::prelude::*,
+    path::Path,
+};
 
 use anyhow::{Result, anyhow};
 use flate2::{Compression, read::ZlibDecoder, write::ZlibEncoder};
 use sha1::{Digest, Sha1};
 use wincode::{SchemaRead, SchemaWrite};
 
-use crate::utils::objects_dir_path;
+use crate::utils::{heads_dir_path, objects_dir_path, trimmed_file_content};
 
 #[derive(SchemaRead, SchemaWrite, Debug)]
 pub struct Blob {
@@ -125,5 +130,34 @@ impl Object {
         } else {
             Ok(None)
         }
+    }
+
+    // TODO: maybe verify is the object is a valid commit
+    pub fn is_commit_reachable(root: &Path, hash: &str) -> Result<bool> {
+        let mut branches = HashSet::<String>::new();
+
+        for entry in heads_dir_path(root).read_dir()?.flatten() {
+            let commit_hash = trimmed_file_content(&entry.path())?;
+            branches.insert(commit_hash);
+        }
+
+        let mut queue = branches.into_iter().collect::<VecDeque<String>>();
+        let mut visited = HashSet::new();
+
+        while let Some(reachable_hash) = queue.pop_front() {
+            if !visited.insert(reachable_hash.clone()) {
+                continue;
+            }
+            if let Object::Commit(commit) = Object::load(root, &reachable_hash)? {
+                if reachable_hash == hash {
+                    return Ok(true);
+                }
+                for parent_hash in commit.parent_hashes {
+                    queue.push_back(parent_hash);
+                }
+            }
+        }
+
+        Ok(false)
     }
 }
